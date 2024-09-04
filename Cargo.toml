@@ -1,0 +1,17 @@
+cargo-features = ["edition2024"]
+
+[package]
+name = "fxmac_rs"
+authors = ["xiaoluoyuan@163.com"]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0"
+description = "fxmac_rs ethernet rust driver on SiFive FU740 board."
+homepage = "https://github.com/elliott10/cadence-macb.git"
+documentation = "https://github.com/elliott10/cadence-macb/blob/main/README.md"
+repository = "https://github.com/elliott10/cadence-macb.git"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "0.4"
