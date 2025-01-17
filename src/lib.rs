@@ -8,11 +8,16 @@
 
 extern crate alloc;
 
-mod mii_const;
-mod macb_const;
+#[macro_use]
+extern crate log;
 
+//mod mii_const;
+mod fxmac_const;
+
+mod utils;
 mod fxmac_phy;
 mod fxmac_dma;
+mod fxmac_intr;
 pub mod fxmac;
 
 #[cfg(test)]

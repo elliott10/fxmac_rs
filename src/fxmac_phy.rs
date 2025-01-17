@@ -1,3 +1,60 @@
+use crate::fxmac_const::*;
+use crate::fxmac::*;
+
+pub const PHY_CONTROL_REG_OFFSET: u32 = 0;
+pub const PHY_STATUS_REG_OFFSET: u32 = 1;
+pub const PHY_IDENTIFIER_1_REG: u32 = 2;
+pub const PHY_IDENTIFIER_2_REG: u32 = 3;
+pub const PHY_AUTONEGO_ADVERTISE_REG: u32 = 4;
+pub const PHY_PARTNER_ABILITIES_1_REG_OFFSET: u32 = 5;
+pub const PHY_PARTNER_ABILITIES_2_REG_OFFSET: u32 = 8;
+pub const PHY_PARTNER_ABILITIES_3_REG_OFFSET: u32 = 10;
+pub const PHY_1000_ADVERTISE_REG_OFFSET: u32 = 9;
+pub const PHY_MMD_ACCESS_CONTROL_REG: u32 = 13;
+pub const PHY_MMD_ACCESS_ADDRESS_DATA_REG: u32 = 14;
+pub const PHY_SPECIFIC_STATUS_REG: u32 = 17;
+pub const PHY_CONTROL_FULL_DUPLEX_MASK: u16 = 0x0100;
+pub const PHY_CONTROL_LINKSPEED_MASK: u16 = 0x0040;
+pub const PHY_CONTROL_LINKSPEED_1000M: u16 = 0x0040;
+pub const PHY_CONTROL_LINKSPEED_100M: u16 = 0x2000;
+pub const PHY_CONTROL_LINKSPEED_10M: u16 = 0x0000;
+pub const PHY_CONTROL_RESET_MASK: u16 = 0x8000;
+pub const PHY_CONTROL_LOOPBACK_MASK: u16 = 0x4000;
+pub const PHY_CONTROL_AUTONEGOTIATE_ENABLE: u16 = 0x1000;
+pub const PHY_CONTROL_AUTONEGOTIATE_RESTART: u16 = 0x0200;
+pub const PHY_STATUS_AUTONEGOTIATE_COMPLETE: u16 = 0x0020;
+pub const PHY_STAT_LINK_STATUS: u16 =              0x0004;
+pub const PHY_AUTOADVERTISE_ASYMMETRIC_PAUSE_MASK: u16 = 0x0800;
+pub const PHY_AUTOADVERTISE_PAUSE_MASK: u16 = 0x0400;
+pub const PHY_AUTOADVERTISE_AUTONEG_ERROR_MASK: u16 = 0x8000;
+
+/* Advertisement control register. */
+pub const PHY_AUTOADVERTISE_10HALF: u16 = 0x0020;        /* Try for 10mbps half-duplex  */
+pub const PHY_AUTOADVERTISE_1000XFULL: u16 = 0x0020;     /* Try for 1000BASE-X full-duplex */
+pub const PHY_AUTOADVERTISE_10FULL: u16 = 0x0040;        /* Try for 10mbps full-duplex  */
+pub const PHY_AUTOADVERTISE_1000XHALF: u16 = 0x0040;     /* Try for 1000BASE-X half-duplex */
+pub const PHY_AUTOADVERTISE_100HALF: u16 = 0x0080;       /* Try for 100mbps half-duplex */
+pub const PHY_AUTOADVERTISE_1000XPAUSE: u16 = 0x0080;    /* Try for 1000BASE-X pause    */
+pub const PHY_AUTOADVERTISE_100FULL: u16 = 0x0100;       /* Try for 100mbps full-duplex */
+pub const PHY_AUTOADVERTISE_1000XPSE_ASYM: u16 = 0x0100; /* Try for 1000BASE-X asym pause */
+pub const PHY_AUTOADVERTISE_100BASE4: u16 = 0x0200;      /* Try for 100mbps 4k packets  */
+pub const PHY_AUTOADVERTISE_100_AND_10: u16 = (PHY_AUTOADVERTISE_10FULL | PHY_AUTOADVERTISE_100FULL | PHY_AUTOADVERTISE_10HALF | PHY_AUTOADVERTISE_100HALF);
+pub const PHY_AUTOADVERTISE_100: u16 = (PHY_AUTOADVERTISE_100FULL | PHY_AUTOADVERTISE_100HALF);
+pub const PHY_AUTOADVERTISE_10: u16 = (PHY_AUTOADVERTISE_10FULL | PHY_AUTOADVERTISE_10HALF);
+pub const PHY_AUTOADVERTISE_1000: u16 = 0x0300;
+pub const PHY_SPECIFIC_STATUS_SPEED_1000M: u16 = (2 << 14);
+pub const PHY_SPECIFIC_STATUS_SPEED_100M: u16 = (1 << 14);
+pub const PHY_SPECIFIC_STATUS_SPEED_0M: u16 = (0 << 14);
+
+pub const FT_SUCCESS: u32 = 0;
+pub const XMAC_PHY_RESET_ENABLE: u32 = 1;
+pub const XMAC_PHY_RESET_DISABLE: u32 = 0;
+pub const FXMAC_PHY_AUTONEGOTIATION_DISABLE: u32 = 0;
+pub const FXMAC_PHY_AUTONEGOTIATION_ENABLE: u32 = 1;
+pub const FXMAC_PHY_MODE_HALFDUPLEX: u32 = 0;
+pub const FXMAC_PHY_MODE_FULLDUPLEX: u32 = 1;
+pub const FXMAC_PHY_MAX_NUM:u32 = 32;
+
 /*
  * Write data to the specified PHY register. The Ethernet driver does not
  * require the device to be stopped before writing to the PHY.  Although it is
@@ -9,20 +66,20 @@
  * Prior to PHY access with this function, the user should have setup the MDIO
  * clock with FXmacSetMdioDivisor().
  */
-fn FXmacPhyWrite(instance_p &mut FXmac, phy_address: u32, register_num: u32, phy_data: u16) -> u32
+pub fn FXmacPhyWrite(instance_p: &mut FXmac, phy_address: u32, register_num: u32, phy_data: u16) -> u32
 {
-    let mgtcr: mut u32 = 0;
-    let ipisr: mut u32 = 0;
-    let ip_write_temp: mut u32 = 0;
-    let status: mut u32 = 0;
+    let mut mgtcr: u32 = 0;
+    let mut ipisr: u32 = 0;
+    let mut ip_write_temp: u32 = 0;
+    let mut status: u32 = 0;
 
     debug!("FXmacPhyWrite, phy_address={:#x}, register_num={}, phy_data={:#x}", phy_address, register_num, phy_data);
 
     /* Make sure no other PHY operation is currently in progress */
-    if (!(read_reg((instance_p.config.base_address + FXMAC_NWSR_OFFSET) as *const u32) &
-           FXMAC_NWSR_MDIOIDLE_MASK)) == 1
+    if (read_reg((instance_p.config.base_address + FXMAC_NWSR_OFFSET) as *const u32) &
+           FXMAC_NWSR_MDIOIDLE_MASK) == 0
     {   
-        status = FXMAC_ERR_PHY_BUSY;
+        status = 6; // FXMAC_ERR_PHY_BUSY;
         error!("FXmacPhyRead error: PHY busy!");
     }else{   
         /* Construct mgtcr mask for the operation */
@@ -42,23 +99,23 @@ fn FXmacPhyWrite(instance_p &mut FXmac, phy_address: u32, register_num: u32, phy
             }
         }
 
-        status = FT_SUCCESS;
-    }   
-    
+        status = 0; // FT_SUCCESS;
+    }
+
     status
 }
 
-fn FXmacPhyRead(instance_p &mut FXmac, phy_address: u32, register_num: u32, phydat_aptr: &mut u16) -> u32
+pub fn FXmacPhyRead(instance_p: &mut FXmac, phy_address: u32, register_num: u32, phydat_aptr: &mut u16) -> u32
 {
-    let mgtcr: mut u32 = 0;
-    let ipisr: mut u32 = 0;
-    let IpReadTemp: mut u32 = 0;
-    let status: mut u32 = 0;
+    let mut mgtcr: u32 = 0;
+    let mut ipisr: u32 = 0;
+    let mut IpReadTemp: u32 = 0;
+    let mut status: u32 = 0;
 
     /* Make sure no other PHY operation is currently in progress */
-    if (!(read_reg((instance_p.config.base_address + FXMAC_NWSR_OFFSET) as *const u32) & FXMAC_NWSR_MDIOIDLE_MASK)) == 1
+    if (read_reg((instance_p.config.base_address + FXMAC_NWSR_OFFSET) as *const u32) & FXMAC_NWSR_MDIOIDLE_MASK) == 0
     {   
-        status = FXMAC_ERR_PHY_BUSY;
+        status = 6;
         error!("FXmacPhyRead error: PHY busy!");
     }else{   
         /* Construct mgtcr mask for the operation */
@@ -79,11 +136,12 @@ fn FXmacPhyRead(instance_p &mut FXmac, phy_address: u32, register_num: u32, phyd
         }
 
         // Read data
-        phydat_aptr = read_reg((instance_p.config.base_address + FXMAC_PHYMNTNC_OFFSET) as *const u32) as u16;
+        *phydat_aptr = read_reg((instance_p.config.base_address + FXMAC_PHYMNTNC_OFFSET) as *const u32) as u16;
+
     debug!("FXmacPhyRead, phy_address={:#x}, register_num={}, phydat_aptr={:#x}", phy_address, register_num, phydat_aptr);
 
-        status = FT_SUCCESS;
-    }   
+        status = 0;
+    }
     
     status
 }
@@ -92,13 +150,14 @@ fn FXmacPhyRead(instance_p &mut FXmac, phy_address: u32, register_num: u32, phyd
 /// FXmacPhyInit
 /// Setup the PHYs for proper speed setting.
 pub fn FXmacPhyInit(
-    mut instance_p: &mut FXmac,
-    mut speed: u32,
-    mut duplex_mode: u32,
-    mut autonegotiation_en: u32,
-    mut reset_flag: u32,
+    instance_p: &mut FXmac,
+    reset_flag: u32,
 ) -> u32 {
+    let speed = instance_p.config.speed;
+    let duplex_mode = instance_p.config.duplex;
+    let autonegotiation_en = instance_p.config.auto_neg;
     info!("FXmacPhyInit, speed={}, duplex_mode={}, autonegotiation_en={}, reset_flag={}",
+    speed,
         duplex_mode,
         autonegotiation_en,
         reset_flag,
@@ -107,7 +166,7 @@ pub fn FXmacPhyInit(
     let mut phy_addr: u32 = 0;
     if FXmacDetect(instance_p, &mut phy_addr) != 0 {
         error!("Phy is not found.");
-        return FXMAC_PHY_IS_NOT_FOUND;
+        return 7; //FXMAC_PHY_IS_NOT_FOUND;
     }
     info!("Setting phy addr is {}", phy_addr);
     instance_p.phy_address = phy_addr;
@@ -131,15 +190,15 @@ pub fn FXmacPhyInit(
     }
     instance_p.link_status = FXMAC_LINKUP;
 
-    FT_SUCCESS
+    0 //FT_SUCCESS
 }
 
-fn FXmacDetect(instance_p: &mut FXmac, phy_addr_p: &mut u32) -> u32
+pub fn FXmacDetect(instance_p: &mut FXmac, phy_addr_p: &mut u32) -> u32
 {
-    let phy_addr: mut u32 = 0;
-    let phy_reg: mut u16 = 0;
-    let phy_id1_reg: mut u16 = 0;
-    let phy_id2_reg: mut u16 = 0;
+    let mut phy_addr: u32 = 0;
+    let mut phy_reg: u16 = 0;
+    let mut phy_id1_reg: u16 = 0;
+    let mut phy_id2_reg: u16 = 0;
 
     for phy_addr in 0..FXMAC_PHY_MAX_NUM
     {   
@@ -153,29 +212,29 @@ fn FXmacDetect(instance_p: &mut FXmac, phy_addr_p: &mut u32) -> u32
 
         if (phy_reg != 0xffff)
         {
-            ret = FXmacPhyRead(instance_p, phy_addr, PHY_IDENTIFIER_1_REG, &phy_id1_reg);
-            ret |= FXmacPhyRead(instance_p, phy_addr, PHY_IDENTIFIER_2_REG, &phy_id2_reg);
+            ret = FXmacPhyRead(instance_p, phy_addr, PHY_IDENTIFIER_1_REG, &mut phy_id1_reg);
+            ret |= FXmacPhyRead(instance_p, phy_addr, PHY_IDENTIFIER_2_REG, &mut phy_id2_reg);
             info!("Phy id1 reg is {:#x}, Phy id2 reg is {:#x}", phy_id1_reg , phy_id2_reg);
 
             if ((ret == FT_SUCCESS) && (phy_id2_reg != 0) && (phy_id2_reg != 0xffff) && (phy_id1_reg != 0xffff))
             {
                 *phy_addr_p = phy_addr;
-                phy_addr_b = phy_addr;
+                //phy_addr_b = phy_addr;
                 info!("Phy addr is {:#x}", phy_addr);
                 return FT_SUCCESS;
             }
         }
     }
 
-    FXMAC_PHY_IS_NOT_FOUND
+    7 //FXMAC_PHY_IS_NOT_FOUND
 }
 
 /// FXmacPhyReset: Perform phy software reset
- fn FXmacPhyReset(instance_p: &mut FXmac, phy_addr: u32) -> u32
+pub fn FXmacPhyReset(instance_p: &mut FXmac, phy_addr: u32) -> u32
  {
-     let control: mut u16 = 0;
+    let mut control: u16 = 0;
  
-     let ret: mut u32 = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &control);
+     let mut ret: u32 = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &mut control);
      if (ret != FT_SUCCESS)
      {
          error!("FXmacPhyReset, read PHY_CONTROL_REG_OFFSET is error");
@@ -193,7 +252,7 @@ fn FXmacDetect(instance_p: &mut FXmac, phy_addr_p: &mut u32) -> u32
  
      loop
      {
-         ret = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &control);
+         ret = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &mut control);
          if (ret != FT_SUCCESS)
          {
              error!("FXmacPhyReset, read PHY_CONTROL_REG_OFFSET is error");
@@ -209,17 +268,17 @@ fn FXmacDetect(instance_p: &mut FXmac, phy_addr_p: &mut u32) -> u32
  }
 
 
-fn FXmacGetIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32) -> u32
+pub fn FXmacGetIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32) -> u32
 {
-    let temp: mut u16 = 0;
-    let temp2: mut u16 = 0;
-    let control: mut u16 = 0;
-    let status: mut u16 = 0;
-    let negotitation_timeout_cnt: mut u32 = 0;
+    let mut temp: u16 = 0;
+    let mut temp2: u16 = 0;
+    let mut control: u16 = 0;
+    let mut status: u16 = 0;
+    let mut negotitation_timeout_cnt: u32 = 0;
 
     info!("Start phy auto negotiation.");
 
-    let mut ret: u32 = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &control);
+    let mut ret: u32 = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &mut control);
     if (ret != FT_SUCCESS)
     {
         error!("FXmacGetIeeePhySpeed,read PHY_CONTROL_REG_OFFSET is error");
@@ -236,10 +295,11 @@ fn FXmacGetIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32) -> u32
     }
 
     info!("Waiting for phy to complete auto negotiation.");
-    do{
-        FDriverMdelay(50);
+    loop{
+        // 睡眠50毫秒
+        crate::utils::msdelay(50);
 
-        ret = FXmacPhyRead(instance_p, phy_addr, PHY_STATUS_REG_OFFSET, &status);
+        ret = FXmacPhyRead(instance_p, phy_addr, PHY_STATUS_REG_OFFSET, &mut status);
         if (ret != FT_SUCCESS)
         {
             error!("FXmacGetIeeePhySpeed,read PHY_STATUS_REG_OFFSET is error");
@@ -247,10 +307,11 @@ fn FXmacGetIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32) -> u32
         }
 
 
-        if (negotitation_timeout_cnt++ >= 0xff)
+        negotitation_timeout_cnt += 1;
+        if (negotitation_timeout_cnt >= 0xff)
         {
             error!("Auto negotiation is error.");
-            return FXMAC_PHY_AUTO_AUTONEGOTIATION_FAILED;
+            return 8;//FXMAC_PHY_AUTO_AUTONEGOTIATION_FAILED;
         }
 
         if (status & PHY_STATUS_AUTONEGOTIATE_COMPLETE) != 0 {
@@ -260,7 +321,7 @@ fn FXmacGetIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32) -> u32
     
     info!("Auto negotiation complete.");
 
-    ret = FXmacPhyRead(instance_p, phy_addr, PHY_SPECIFIC_STATUS_REG, &temp);
+    ret = FXmacPhyRead(instance_p, phy_addr, PHY_SPECIFIC_STATUS_REG, &mut temp);
     if (ret != FT_SUCCESS)
     {
         error!("FXmacGetIeeePhySpeed,read PHY_SPECIFIC_STATUS_REG is error");
@@ -268,7 +329,7 @@ fn FXmacGetIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32) -> u32
     }
 
     info!("Temp is {:#x}", temp);
-    ret = FXmacPhyRead(instance_p, phy_addr, PHY_STATUS_REG_OFFSET, &temp2);
+    ret = FXmacPhyRead(instance_p, phy_addr, PHY_STATUS_REG_OFFSET, &mut temp2);
     if (ret != FT_SUCCESS)
     {
         error!("FXmacGetIeeePhySpeed,read PHY_STATUS_REG_OFFSET is error");
@@ -307,15 +368,15 @@ fn FXmacGetIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32) -> u32
     FT_SUCCESS
 }
 
-fn FXmacConfigureIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32, speed: u32, duplex_mode: u32) -> u32
+pub fn FXmacConfigureIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32, speed: u32, duplex_mode: u32) -> u32
 {
-    let control: mut u16 = 0;;
-    let autonereg: mut u16 = 0;;
-    let specific_reg: mut u16 = 0;
+    let mut control: u16 = 0;;
+    let mut autonereg: u16 = 0;;
+    let mut specific_reg: u16 = 0;
 
-    info("Manual setting, phy_addr is {:#x},speed {}, duplex_mode is {}.", phy_addr, speed, duplex_mode);
+    info!("Manual setting, phy_addr is {:#x},speed {}, duplex_mode is {}.", phy_addr, speed, duplex_mode);
 
-    let mut ret: u32 = FXmacPhyRead(instance_p, phy_addr, PHY_AUTONEGO_ADVERTISE_REG, &autonereg);
+    let mut ret: u32 = FXmacPhyRead(instance_p, phy_addr, PHY_AUTONEGO_ADVERTISE_REG, &mut autonereg);
     if (ret != FT_SUCCESS)
     {
         error!("FXmacConfigureIeeePhySpeed, read PHY_AUTONEGO_ADVERTISE_REG is error.");
@@ -331,7 +392,7 @@ fn FXmacConfigureIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32, speed: u32,
         return ret;
     }
 
-    ret = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &control);
+    ret = FXmacPhyRead(instance_p, phy_addr, PHY_CONTROL_REG_OFFSET, &mut control);
     if (ret != FT_SUCCESS)
     {
         error!("FXmacConfigureIeeePhySpeed, read PHY_AUTONEGO_ADVERTISE_REG is error.");
@@ -372,18 +433,19 @@ fn FXmacConfigureIeeePhySpeed(instance_p: &mut FXmac, phy_addr: u32, speed: u32,
         return ret;
     }
 
-    FDriverMdelay(1500);
+    //FDriverMdelay(1500);
+    crate::utils::msdelay(1500);
 
     info!("Manual selection completed.");
 
-    ret = FXmacPhyRead(instance_p, phy_addr, PHY_SPECIFIC_STATUS_REG, &specific_reg);
+    ret = FXmacPhyRead(instance_p, phy_addr, PHY_SPECIFIC_STATUS_REG, &mut specific_reg);
     if (ret != FT_SUCCESS)
     {
         error!("FXmacConfigureIeeePhySpeed, read PHY_SPECIFIC_STATUS_REG is error.");
         return ret;
     }
 
-    info!("Specific reg is 0x%x.", specific_reg);
+    info!("Specific reg is {:#x}", specific_reg);
 
     if (specific_reg & (1 << 13)) != 0
     {

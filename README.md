@@ -1,5 +1,5 @@
 # Cadence Macb ethernet driver
-cadence-macb ethernet Rust driver on SiFive FU740 board.
+fxmac ethernet Rust driver on PhytiumPi board.
 
 ### Quick Start
 
