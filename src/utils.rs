@@ -144,14 +144,15 @@ pub fn msdelay(ms: u64) {
 }
 
 #[linkage = "weak"]
-#[export_name = "phys_to_virt"]
+#[unsafe(export_name = "phys_to_virt")]
 pub fn phys_to_virt(addr: usize) -> usize {
+    debug!("fxmac: phys_to_virt {:#x}", addr);
     addr
 }
 
 /// 申请DMA内存页
 #[linkage = "weak"]
-#[export_name = "dma_alloc_coherent"]
+#[unsafe(export_name = "dma_alloc_coherent")]
 pub fn dma_alloc_coherent(pages: usize) -> (usize, usize) {
     let paddr: Box<[u32]> = if pages == 1 {
         Box::new([0; 1024]) // 4096
@@ -167,22 +168,23 @@ pub fn dma_alloc_coherent(pages: usize) -> (usize, usize) {
     let paddr = Box::into_raw(paddr) as *const u32 as usize;
     //let vaddr = phys_to_virt(paddr);
     let vaddr = paddr;
-    trace!("dma alloc paddr: {:#x}, len={}", paddr, len);
+    debug!("fxmac: dma alloc paddr: {:#x}, len={}", paddr, len);
 
     (vaddr, paddr)
 }
 
 /// 释放DMA内存页
 #[linkage = "weak"]
-#[export_name = "dma_free_coherent"]
+#[unsafe(export_name = "dma_free_coherent")]
 pub fn dma_free_coherent(vaddr: usize, pages: usize) {
+    debug!("fxmac: dma free vaddr: {:#x}, pages={}", vaddr, pages);
     let palloc = vaddr as *mut [u32; 1024];
     unsafe{ drop(Box::from_raw(palloc)); }
 }
 
 /// 请求分配irq
 #[linkage = "weak"]
-#[export_name = "dma_request_irq"]
+#[unsafe(export_name = "dma_request_irq")]
 pub fn dma_request_irq(irq: usize, handler: fn(u64)) {
     unimplemented!()
 }

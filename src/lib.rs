@@ -20,6 +20,9 @@ mod fxmac_dma;
 mod fxmac_intr;
 pub mod fxmac;
 
+pub use fxmac::{FXmac, xmac_init};
+pub use fxmac_dma::{FXmacLwipPortTx, FXmacRecvHandler};
+
 #[cfg(test)]
 mod tests {
     #[test]

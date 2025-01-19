@@ -116,7 +116,7 @@ pub fn FXmacErrorHandler(instance_p: &mut FXmac, direction: u8, error_word: u32)
 pub fn FXmacRecvIsrHandler(instance: &mut FXmac) {
     info!("Recv Isr");
     write_reg((instance.config.base_address + FXMAC_IDR_OFFSET) as *mut u32, FXMAC_IXR_RXCOMPL_MASK);
-    // instance_p->recv_flg ++;
+    instance.lwipport.recv_flg += 1;
 
     ethernetif_input_to_recv_packets(instance);
 }
@@ -126,9 +126,11 @@ pub static XMAC: AtomicPtr<FXmac> = AtomicPtr::new(core::ptr::null_mut());
 pub fn xmac_intr_handler(intr: u64) {
 
     info!("Handling xmac intr ...");
+
     let xmac = XMAC.load(Ordering::Relaxed);
-if !xmac.is_null() {
+    if !xmac.is_null() {
          let xmac_ptr = unsafe{ &mut (*xmac)};
+
          // maybe irq num
          let vector = xmac_ptr.config.queue_irq_num[0] ;
          FXmacIntrHandler(vector as i32, xmac_ptr);

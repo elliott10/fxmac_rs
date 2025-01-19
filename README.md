@@ -1,4 +1,4 @@
-# Cadence Macb ethernet driver
+# FXMAC ethernet driver
 fxmac ethernet Rust driver on PhytiumPi board.
 
 ### Quick Start
@@ -31,4 +31,5 @@ cadence_macb::eth_macb_ops::macb_recv(&mut macb_device, &mut rx_buffer);
 ```
 
 ## Reference
+* phytium-standalone-sdk
 * Linux and U-Boot C code

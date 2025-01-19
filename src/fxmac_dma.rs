@@ -746,22 +746,24 @@ pub fn FXmacBdRingFromHwTx(ring_ptr: &mut FXmacBdRing, bd_limit: usize, mut bd_s
     status
 }
 
-pub fn FXmacLwipPortTx(instance: &mut FXmac, pbuf: Vec<Vec<u8>>) -> u32
+pub fn FXmacLwipPortTx(instance: &mut FXmac, pbuf: Vec<Vec<u8>>) -> i32
 {
+    info!("TX transmit packets");
     // 发送网络包时注意屏蔽下中断
 
     // check if space is available to send
     let freecnt = (instance.tx_bd_queue.bdring).free_cnt;
     if freecnt <= 5 {
+        info!("TX freecnt={}, let's process sent BDs", freecnt);
         //let txring = &mut (instance.tx_bd_queue.bdring);
         FXmacProcessSentBds(instance);
     }
 
     if (instance.tx_bd_queue.bdring).free_cnt != 0 {
-        FXmacSgsend(instance, pbuf)
+        FXmacSgsend(instance, pbuf) as i32
     }else{
         error!(" TX packets dropped, no space");
-        3 // FREERTOS_XMAC_NO_VALID_SPACE
+        -3 // FREERTOS_XMAC_NO_VALID_SPACE
     }
 }
 
@@ -875,7 +877,8 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
 }
 
 /// 收包函数
-pub fn FXmacRecvHandler(instance_p: &mut FXmac) {
+pub fn FXmacRecvHandler(instance_p: &mut FXmac) -> Option<Vec<Vec<u8>>> {
+    info!("RX receive packets");
     let mut recv_packets = Vec::new();
 
     let mut rxbdset: *mut FXmacBd = null_mut();
@@ -954,6 +957,11 @@ pub fn FXmacRecvHandler(instance_p: &mut FXmac) {
         SetupRxBds(instance_p);
     }
 
+    if recv_packets.len() > 0 {
+        Some(recv_packets)
+    } else {
+        None
+    }
 }
 
 pub fn SetupRxBds(instance_p: &mut FXmac) {
