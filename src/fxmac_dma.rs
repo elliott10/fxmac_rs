@@ -242,97 +242,99 @@ fn FXMAC_RING_SEEKAHEAD(ring_ptr: &mut FXmacBdRing, mut bdptr: *mut FXmacBd, num
         bdptr = addr as *mut FXmacBd;
 }
 
-/*
-pub fn FXmacBdRingCreate() -> u32 {
-    
+
+pub fn FXmacAllocDmaPbufs(instance_p: &mut FXmac) -> u32 {
     // 为DMA构建环形缓冲区内存
 
-    let alloc_tx_ring_pages =
-        ((MACB_TX_RING_SIZE * DMA_DESC_SIZE) + (M::PAGE_SIZE - 1)) / M::PAGE_SIZE;
-    let alloc_rx_ring_pages =
-        ((MACB_RX_RING_SIZE * DMA_DESC_SIZE) + (M::PAGE_SIZE - 1)) / M::PAGE_SIZE;
-    let tx_ring_dma = M::dma_alloc_coherent(alloc_tx_ring_pages);
-    let rx_ring_dma = M::dma_alloc_coherent(alloc_rx_ring_pages);
+    let mut status: u32 = 0;
+    let rxringptr: &mut FXmacBdRing = &mut instance_p.rx_bd_queue.bdring;
+    let txringptr: &mut FXmacBdRing = &mut instance_p.tx_bd_queue.bdring;
 
-    let tx_ring = unsafe {
-        slice::from_raw_parts_mut(
-            phys_to_virt(tx_ring_dma) as *mut DmaDesc,
-            MACB_TX_RING_SIZE * DMA_DESC_SIZE / size_of::<DmaDesc>(), // 4096/16 = 256 个 dma_desc ?
-        )
-    };
+    // Allocate RX descriptors, 1 RxBD at a time.
+    info!("Allocate RX descriptors, 1 RxBD at a time.");
+    for i in 0..FXMAX_RX_PBUFS_LENGTH
+    {
+        let max_frame_size = if (instance_p.lwipport.feature & FXMAC_LWIP_PORT_CONFIG_JUMBO) != 0
+        { info!("FXMAC_LWIP_PORT_CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE_JUMBO } else { info!("NO CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE };
 
-    let rx_ring = unsafe {
-        slice::from_raw_parts_mut(
-            phys_to_virt(rx_ring_dma) as *mut DmaDesc,
-            MACB_RX_RING_SIZE * DMA_DESC_SIZE / size_of::<DmaDesc>(),
-        )
-    };
+        let alloc_rx_buffer_pages = (max_frame_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
+        let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_rx_buffer_pages);
 
-    let mut send_buffers = Vec::with_capacity(tx_ring.len());
-    let mut recv_buffers = Vec::with_capacity(rx_ring.len());
+    let rxringptr: &mut FXmacBdRing = &mut instance_p.rx_bd_queue.bdring;
+        let rxbd: *mut FXmacBd = null_mut();
+//let my_speed: Box<i32> = Box::new(88);
+//rxbd = Box::into_raw(my_speed);
+// OR
+//let mut my_speed: i32 = 88;
+//rxbd = &mut my_speed;
 
-    // 一起申请所有RX内存
-    let alloc_rx_buffer_pages =
-        ((MACB_RX_RING_SIZE * buffer_size) + (M::PAGE_SIZE - 1)) / M::PAGE_SIZE;
-    let rx_buffer_dma: usize = M::dma_alloc_coherent(alloc_rx_buffer_pages);
-
-    info!("Set ring desc buffer for RX");
-    let mut count = 0;
-    let mut paddr: u64 = rx_buffer_dma as u64;
-    for i in 0..MACB_RX_RING_SIZE {
-        if i == MACB_RX_RING_SIZE - 1 {
-            paddr |= 1 << MACB_RX_WRAP_OFFSET;
+        // 在BD list中预留待设置的BD
+        status = FXmacBdRingAlloc(rxringptr, 1, rxbd);
+        assert!(!rxbd.is_null());
+        if (status != 0)
+        {
+            error!("FXmacInitDma: Error allocating RxBD");
+            return status;
         }
 
-        if (config.hw_dma_cap & HW_DMA_CAP_64B) != 0 {
-            count = i * 2;
-            rx_ring[count + 1].addr = upper_32_bits(paddr); // Fill DmaDesc64.addrh
-        } else {
-            count = i;
+        // 将一组BD排队到之前由FXmacBdRingAlloc分配了的硬件上
+        status = FXmacBdRingToHw(rxringptr, 1, rxbd);
+
+        let bdindex = FXMAC_BD_TO_INDEX(rxringptr, rxbd as u64);
+
+        let mut temp = rxbd as *mut u32;
+
+        let mut v = 0;
+        if bdindex == (FXMAX_RX_PBUFS_LENGTH - 1) as u32 {
+            // Marks last descriptor in receive buffer descriptor list
+            v |= FXMAC_RXBUF_WRAP_MASK;
         }
-        rx_ring[count].ctrl = 0;
-        rx_ring[count].addr = lower_32_bits(paddr);
+        unsafe{
+        temp.write_volatile(v);
+        // Clear word 1 in  descriptor
+        temp.add(1).write_volatile(0);
+        }
+        crate::utils::DSB();
 
-        recv_buffers.push(phys_to_virt(paddr as usize));
-        paddr += buffer_size as u64;
+        // dc civac, virt_addr 通过虚拟地址清除和无效化cache
+        crate::utils::FCacheDCacheInvalidateRange(rx_mbufs_vaddr as u64, max_frame_size as u64);
 
-        // sync memery, fence指令？
+        // Set the BD's address field (word 0)
+        // void *payload; 指向数据区域的指针，指向该pbuf管理的数据区域起始地址，可以是ROM或者RAM中的某个地址
+        fxmac_bd_set_address_rx(rxbd as u64, rx_mbufs_dma as u64);
+
+        instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize] = rx_mbufs_vaddr as u64;
     }
-    flush_dcache_range(); // RX dma ring and buffer
 
-    // 一起申请所有TX内存
-    let alloc_tx_buffer_pages =
-        ((MACB_TX_RING_SIZE * buffer_size) + (M::PAGE_SIZE - 1)) / M::PAGE_SIZE;
-    let tx_buffer_dma: usize = M::dma_alloc_coherent(alloc_tx_buffer_pages);
-    info!("Set ring desc buffer for TX");
-    count = 0;
-    paddr = tx_buffer_dma as u64;
-    for i in 0..MACB_TX_RING_SIZE {
-        if (config.hw_dma_cap & HW_DMA_CAP_64B) != 0 {
-            count = i * 2;
-            tx_ring[count + 1].addr = upper_32_bits(paddr); // Fill DmaDesc64.addrh
-        } else {
-            count = i;
+        for index in  0..FXMAX_TX_PBUFS_LENGTH {
+            let max_fr_size = if (instance_p.lwipport.feature & FXMAC_LWIP_PORT_CONFIG_JUMBO) != 0
+            {
+               FXMAC_MAX_FRAME_SIZE_JUMBO
+            } else {
+                FXMAC_MAX_FRAME_SIZE
+            };
+            let alloc_pages = (max_fr_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
+            let (mut tx_mbufs_vaddr, mut tx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_pages);
+    
+            instance_p.lwipport.buffer.tx_pbufs_storage[index as usize] = tx_mbufs_vaddr as u64;
+
+            /*
+            let txbd: *mut FXmacBd = null_mut();
+            FXmacBdRingAlloc(txringptr, 1, txbd);
+            FXmacBdRingToHw(txringptr, 1, txbd);
+
+            let bdindex = FXMAC_BD_TO_INDEX(txringptr, txbd as u64);
+            assert!(index == bdindex as usize);
+            */
+            // From index to BD
+            let txbd = (txringptr.base_bd_addr + (index as u64 * txringptr.separation as u64)) as *mut FXmacBd;
+
+            fxmac_bd_set_address_tx(txbd as u64, tx_mbufs_dma as u64);
+            //curbdpntr = FXMAC_BD_RING_NEXT(txring, curbdpntr);
+            crate::utils::DSB();
         }
-        tx_ring[count].addr = lower_32_bits(paddr);
-
-        if i == MACB_TX_RING_SIZE - 1 {
-            tx_ring[count].ctrl = (1 << MACB_TX_USED_OFFSET) | (1 << MACB_TX_WRAP_OFFSET);
-        } else {
-            tx_ring[count].ctrl = (1 << MACB_TX_USED_OFFSET);
-        }
-        // Used – must be zero for the controller to read data to the transmit buffer.
-        // The controller sets this to one for the first buffer of a frame once it has been successfully transmitted.
-        // Software must clear this bit before the buffer can be used again.
-
-        send_buffers.push(phys_to_virt(paddr as usize));
-        paddr += buffer_size as u64;
-    }
-    flush_dcache_range(); // TX dma ring
-
+    0
 }
-*/
-
 
 pub fn FXmacInitDma(instance_p: &mut FXmac) -> u32
 {
@@ -373,64 +375,10 @@ pub fn FXmacInitDma(instance_p: &mut FXmac) -> u32
     /* We reuse the bd template, as the same one will work for both rx and tx. */
     status = FXmacBdRingClone(txringptr, &mut bdtemplate, FXMAC_SEND);
 
-    /*
-     * Allocate RX descriptors, 1 RxBD at a time.
-     */
-    info!("Allocate RX descriptors, 1 RxBD at a time.");
-    for i in 0..FXMAX_RX_PBUFS_LENGTH
-    {
-        let max_frame_size = if (instance_p.lwipport.feature & FXMAC_LWIP_PORT_CONFIG_JUMBO) != 0
-        { info!("FXMAC_LWIP_PORT_CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE_JUMBO } else { info!("NO CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE };
-        let alloc_rx_buffer_pages = (max_frame_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
-
-        let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_rx_buffer_pages);
-
-        let rxbd: *mut FXmacBd = null_mut();
-//let my_speed: Box<i32> = Box::new(88);
-//rxbd = Box::into_raw(my_speed);
-// OR
-//let mut my_speed: i32 = 88;
-//rxbd = &mut my_speed;
-
-        // 在BD list中预留待设置的BD
-        status = FXmacBdRingAlloc(rxringptr, 1, rxbd);
-        if (status != 0)
-        {
-            error!("FXmacInitDma: Error allocating RxBD");
-            return status;
-        }
-
-        // 将一组BD排队到之前由FXmacBdRingAlloc分配了的硬件上
-        status = FXmacBdRingToHw(rxringptr, 1, rxbd);
-
-        let bdindex = FXMAC_BD_TO_INDEX(rxringptr, rxbd as u64);
-
-        let mut temp = rxbd as *mut u32;
-
-        let mut v = 0;
-        if bdindex == (FXMAX_RX_PBUFS_LENGTH - 1) as u32 {
-            // Marks last descriptor in receive buffer descriptor list
-            v |= FXMAC_RXBUF_WRAP_MASK;
-        }
-        unsafe{
-        temp.write_volatile(v);
-        // Clear word 1 in  descriptor
-        temp.add(1).write_volatile(0);
-        }
-        crate::utils::DSB();
-
-        // dc civac, virt_addr 通过虚拟地址清除和无效化cache
-        crate::utils::FCacheDCacheInvalidateRange(rx_mbufs_vaddr as u64, max_frame_size as u64);
-
-        // Set the BD's address field (word 0)
-        // void *payload; 指向数据区域的指针，指向该pbuf管理的数据区域起始地址，可以是ROM或者RAM中的某个地址
-        fxmac_bd_set_address_rx(rxbd as u64, rx_mbufs_dma as u64);
-
-        instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize] = rx_mbufs_vaddr as u64;
-    }
+    // 创建收发网络包的DMA内存
+    FXmacAllocDmaPbufs(instance_p);
 
     FXmacSetQueuePtr(instance_p.rx_bd_queue.bdring.phys_base_addr, 0, FXMAC_RECV);
-    
     FXmacSetQueuePtr(instance_p.tx_bd_queue.bdring.phys_base_addr, 0, FXMAC_SEND);
     
     let FXMAC_TAIL_QUEUE = |queue: u64| 0x0e80 + (queue << 2);
@@ -772,6 +720,7 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
     let mut status: u32 = 0;
     let mut bdindex: u32 = 0;
     let mut max_fr_size: u32 = 0;
+    let mut send_len: u32 = 0;
 
     let mut last_txbd: *mut FXmacBd = null_mut();
     let txbdset: *mut FXmacBd = null_mut();
@@ -788,18 +737,12 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
     for q in &p {
         bdindex = FXMAC_BD_TO_INDEX(txring, txbd as u64);
 
+        /*
         if (instance_p.lwipport.buffer.tx_pbufs_storage[bdindex as usize] != 0)
         {
             panic!("PBUFS not available");
-        }
-
-        /* Send the data from the pbuf to the interface, one pbuf at a
-           time. The size of the data in each pbuf is kept in the ->len
-           variable. */
-        //FCacheDCacheFlushRange((uintptr)q->payload, (uintptr)q->len);
-
-        fxmac_bd_set_address_tx(txbd as u64, q.as_ptr() as u64);
-
+        }*/
+   
         if (instance_p.lwipport.feature & FXMAC_LWIP_PORT_CONFIG_JUMBO) != 0
         {
             max_fr_size = FXMAC_MAX_FRAME_SIZE_JUMBO;
@@ -808,10 +751,21 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
         {
             max_fr_size = FXMAC_MAX_FRAME_SIZE;
         }
+        let pbufs_len = min(q.len(), max_fr_size as usize);
+
+        let pbufs_virt = instance_p.lwipport.buffer.tx_pbufs_storage[bdindex as usize];
+        let pbuf = unsafe { from_raw_parts_mut(pbufs_virt as *mut u8, pbufs_len) };
+        pbuf.copy_from_slice(q);
+        crate::utils::FCacheDCacheFlushRange(pbufs_virt, pbufs_len as u64);
+        info!(">>>>>>>>> TX PKT {}@{:#x}", pbufs_len, pbufs_virt);
+
+        //fxmac_bd_set_address_tx(txbd as u64, q.as_ptr() as u64);
+        send_len += pbufs_len as u32;
 
         let t_txbd = txbd as u64;
         if q.len() > max_fr_size as usize
         {
+            warn!("The packet: {} to be send is TOO LARGE", q.len());
             // FXMAC_BD_SET_LENGTH: 设置BD的发送长度（以bytes为单位）。每次BD交给硬件时,都必须设置该长度
             // FXMAC_BD_SET_LENGTH(txbd, max_fr_size & 0x3FFF);
             fxmac_bd_write(t_txbd, FXMAC_BD_STAT_OFFSET,
@@ -822,7 +776,7 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
             ((fxmac_bd_read(t_txbd, FXMAC_BD_STAT_OFFSET) & !FXMAC_TXBUF_LEN_MASK) | (q.len() as u32 & 0x3FFF)));
         }
 
-        instance_p.lwipport.buffer.tx_pbufs_storage[bdindex as usize] = q.as_ptr() as u64;
+        //instance_p.lwipport.buffer.tx_pbufs_storage[bdindex as usize] = q.as_ptr() as u64;
 
         // 增加该pbuf的引用计数。
         //pbuf_ref(q);
@@ -874,7 +828,7 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
     let value = read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32) | FXMAC_NWCTRL_STARTTX_MASK;
     write_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32, value);
 
-    0
+    send_len
 }
 
 /// 收包函数
@@ -918,8 +872,9 @@ pub fn FXmacRecvHandler(instance_p: &mut FXmac) -> Option<Vec<Vec<u8>>> {
             };
 
             let bdindex: u32 = FXMAC_BD_TO_INDEX(rxring, curbdptr as u64);
-            let mbuf = unsafe { from_raw_parts_mut(instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize] as *mut u8, rx_bytes as usize) };
-            info!("RX PKT {} <<<<<<<<<", rx_bytes);
+            let pbufs_virt = instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize];
+            info!("RX PKT {}@{:#x} <<<<<<<<<", rx_bytes, pbufs_virt);
+            let mbuf = unsafe { from_raw_parts_mut(pbufs_virt as *mut u8, rx_bytes as usize) };
 
             // Copy mbuf into a new Vec
             recv_packets.push(mbuf.to_vec());
@@ -1167,20 +1122,18 @@ pub fn FXmacProcessSentBds(instance_p: &mut FXmac)
             }
             crate::utils::DSB();
 
-            let pbuf = instance_p.lwipport.buffer.tx_pbufs_storage[bdindex];
-            if pbuf != 0 {
+            //let pbuf = instance_p.lwipport.buffer.tx_pbufs_storage[bdindex];
+            /* if pbuf != 0 {
                 // pbuf_free(p);
-                // ?todo xiaoluoyuan@163.com
                 let pages = (FXMAC_MAX_FRAME_SIZE as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
                 // Deallocate DMA memory by virtual address
                 crate::utils::dma_free_coherent(pbuf as usize, pages);
-            }
+            } */
 
-            instance_p.lwipport.buffer.tx_pbufs_storage[bdindex] = 0;
+            //instance_p.lwipport.buffer.tx_pbufs_storage[bdindex] = 0;
 
             let b = curbdpntr;
             curbdpntr = FXMAC_BD_RING_NEXT(txring, curbdpntr);
-
             assert!(curbdpntr as usize != b as usize);
 
             n_pbufs_freed -= 1;

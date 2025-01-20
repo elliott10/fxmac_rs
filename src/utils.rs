@@ -71,6 +71,12 @@ pub fn MTCPDC_CIVAC(adr: u64) {
     }
 }
 
+pub fn MTCPDC_CVAC(adr: u64) {
+    unsafe {
+        asm!("dc CVAC, {}", in(reg) adr);
+    }
+}
+
 /// CACHE of PhytiumPi
 pub const CACHE_LINE_ADDR_MASK: u64 = 0x3F;
 pub const CACHE_LINE: u64 = 64;
@@ -97,6 +103,28 @@ pub fn FCacheDCacheInvalidateRange(mut adr: u64, len: u64)
    /* Wait for invalidate to complete */
    DSB();
    MTCPSR(currmask);
+}
+
+/// Flush Data cache
+/// DC CVAC, Virtual address to use. No alignment restrictions apply to vaddr
+/// adr: 64bit start address of the range to be flush.
+pub fn FCacheDCacheFlushRange(mut adr: u64, len: u64)
+{
+    let end: u64 = adr + len;
+    adr = adr & (!CACHE_LINE_ADDR_MASK);
+    let currmask: u32 = MFCPSR();
+    MTCPSR(currmask | IRQ_FIQ_MASK);
+    if len != 0
+    {
+        while (adr < end)
+        {
+            MTCPDC_CVAC(adr); /* Clean data cache by address to Point of Coherency */
+            adr += CACHE_LINE;
+        }
+    }
+    /* Wait for Clean to complete */
+    DSB();
+    MTCPSR(currmask);
 }
 
 use aarch64_cpu::registers::{CNTVCT_EL0, CNTFRQ_EL0, Readable};
