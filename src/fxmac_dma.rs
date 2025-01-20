@@ -340,10 +340,10 @@ pub fn FXmacInitDma(instance_p: &mut FXmac) -> u32
 
     let rxringptr: &mut FXmacBdRing = &mut instance_p.rx_bd_queue.bdring;
     let txringptr: &mut FXmacBdRing = &mut instance_p.tx_bd_queue.bdring;
-    info!("rxringptr: {:p}", rxringptr);
-    info!("txringptr: {:p}", txringptr);
-    info!("rx_bdspace: {:p}", &instance_p.lwipport.buffer.rx_bdspace);
-    info!("tx_bdspace: {:p}", &instance_p.lwipport.buffer.tx_bdspace);
+    info!("FXmacInitDma, rxringptr: {:p}", rxringptr);
+    info!("FXmacInitDma, txringptr: {:p}", txringptr);
+    info!("FXmacInitDma, rx_bdspace: {:p}", &instance_p.lwipport.buffer.rx_bdspace);
+    info!("FXmacInitDma, tx_bdspace: {:p}", &instance_p.lwipport.buffer.tx_bdspace);
 
     // Setup RxBD space.
     // 对BD域清零
@@ -783,6 +783,7 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
     /* obtain as many BD's */
     status = FXmacBdRingAlloc(txring, n_pbufs, txbdset);
 
+    debug!("FXmacSgsend, txbdset is null ? {}", txbdset.is_null());
     let mut txbd: *mut FXmacBd = txbdset;
     for q in &p {
         bdindex = FXMAC_BD_TO_INDEX(txring, txbd as u64);
@@ -985,14 +986,14 @@ pub fn SetupRxBds(instance_p: &mut FXmac) {
         };
         let alloc_rx_buffer_pages: usize = (max_frame_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
 
-        let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_rx_buffer_pages);
-
         status = FXmacBdRingAlloc(rxring, 1, rxbd);
-
+        assert!(!rxbd.is_null());
         status = FXmacBdRingToHw(rxring, 1, rxbd);
 
+        // 继续使用前面申请过的dma pbufs, 不再清理并重新申请
+        //let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_rx_buffer_pages);
 
-        crate::utils::FCacheDCacheInvalidateRange(rx_mbufs_vaddr as u64, max_frame_size as u64);
+        //crate::utils::FCacheDCacheInvalidateRange(rx_mbufs_vaddr as u64, max_frame_size as u64);
 
         let bdindex: u32 = FXMAC_BD_TO_INDEX(rxring, rxbd as u64);
         let mut temp = rxbd as *mut u32;
@@ -1009,9 +1010,10 @@ pub fn SetupRxBds(instance_p: &mut FXmac) {
         crate::utils::DSB();
 
         // 设置BD的地址字段(word 0)
-        fxmac_bd_set_address_rx(rxbd as u64, rx_mbufs_dma as u64);
+        //fxmac_bd_set_address_rx(rxbd as u64, rx_mbufs_dma as u64);
 
-        instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize] = rx_mbufs_vaddr as u64;
+        assert!(instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize] != 0);
+        //instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize] = rx_mbufs_vaddr as u64;
     }
 }
 

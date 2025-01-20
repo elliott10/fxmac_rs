@@ -94,7 +94,7 @@ pub fn FXmacPhyWrite(instance_p: &mut FXmac, phy_address: u32, register_num: u32
             ipisr = read_reg((instance_p.config.base_address + FXMAC_NWSR_OFFSET) as *const u32);
             ip_write_temp = ipisr;
 
-            if !(ip_write_temp & FXMAC_NWSR_MDIOIDLE_MASK) == 0 {
+            if (ip_write_temp & FXMAC_NWSR_MDIOIDLE_MASK) != 0 {
                 break;
             }
         }
@@ -130,7 +130,7 @@ pub fn FXmacPhyRead(instance_p: &mut FXmac, phy_address: u32, register_num: u32,
             ipisr = read_reg((instance_p.config.base_address + FXMAC_NWSR_OFFSET) as *const u32);
             IpReadTemp = ipisr;
 
-            if !(IpReadTemp & FXMAC_NWSR_MDIOIDLE_MASK) == 0 {
+            if (IpReadTemp & FXMAC_NWSR_MDIOIDLE_MASK) != 0 {
                 break;
             }
         }
