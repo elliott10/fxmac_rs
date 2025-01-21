@@ -170,11 +170,17 @@ pub fn usdelay(us: u64) {
 pub fn msdelay(ms: u64) {
     usdelay(ms * 1000);
 }
+#[linkage = "weak"]
+#[unsafe(export_name = "virt_to_phys_fxmac")]
+pub fn virt_to_phys(addr: usize) -> usize {
+    debug!("fxmac: virt_to_phys_fxmac {:#x}", addr);
+    addr
+}
 
 #[linkage = "weak"]
 #[unsafe(export_name = "phys_to_virt_fxmac")]
 pub fn phys_to_virt(addr: usize) -> usize {
-    debug!("fxmac: phys_to_virt {:#x}", addr);
+    debug!("fxmac: phys_to_virt_fxmac {:#x}", addr);
     addr
 }
 
@@ -214,7 +220,8 @@ pub fn dma_free_coherent(vaddr: usize, pages: usize) {
 #[linkage = "weak"]
 #[unsafe(export_name = "dma_request_irq_fxmac")]
 pub fn dma_request_irq(irq: usize, handler: fn(u64)) {
-    unimplemented!()
+    warn!("dma_request_irq_fxmac unimplemented");
+    //unimplemented!()
 }
 
 // 路由中断到指定的cpu，或所有的cpu

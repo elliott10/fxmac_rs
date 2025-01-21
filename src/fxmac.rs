@@ -270,6 +270,7 @@ pub fn xmac_init(hwaddr: &[u8; 6]) -> &'static mut FXmac { // i32
     */
 
     /////////
+    msdelay(2000); //开始前等2s
 
     // ethernetif_start()
     // start mac
