@@ -14,8 +14,8 @@ use crate::utils::*;
 pub const FXMAX_RX_BDSPACE_LENGTH: usize = FXMAX_RX_PBUFS_LENGTH * 64; // 0x20000, default set 128KB
 pub const FXMAX_TX_BDSPACE_LENGTH: usize = FXMAX_RX_PBUFS_LENGTH * 64; // 0x20000, default set 128KB
 
-pub const FXMAX_RX_PBUFS_LENGTH: usize = 8; // 128
-pub const FXMAX_TX_PBUFS_LENGTH: usize = 8;
+pub const FXMAX_RX_PBUFS_LENGTH: usize = 128; // 128
+pub const FXMAX_TX_PBUFS_LENGTH: usize = 128;
 
 pub const FXMAX_MAX_HARDWARE_ADDRESS_LENGTH: usize =6;
 
@@ -273,7 +273,6 @@ fn FXMAC_RING_SEEKAHEAD(ring_ptr: &mut FXmacBdRing, bdptr: &mut (*mut FXmacBd), 
         
         trace!("FXMAC_RING_SEEKAHEAD, bdptr: {:#x}, addr: {:#x}", *bdptr as u64, addr);
 }
-
 
 pub fn FXmacAllocDmaPbufs(instance_p: &mut FXmac) -> u32 {
     // 为DMA构建环形缓冲区内存
@@ -935,10 +934,10 @@ pub fn FXmacRecvHandler(instance_p: &mut FXmac) -> Option<Vec<Vec<u8>>> {
 
             let bdindex: u32 = FXMAC_BD_TO_INDEX(rxring, curbdptr as u64);
             let pbufs_virt = instance_p.lwipport.buffer.rx_pbufs_storage[bdindex as usize];
-            info!("RX PKT {} @{:#x} <<<<<<<<< - {}", rx_bytes, pbufs_virt, bdindex);
+            debug!("RX PKT {} @{:#x} <<<<<<<<< - {}", rx_bytes, pbufs_virt, bdindex);
             let mbuf = unsafe { from_raw_parts_mut(pbufs_virt as *mut u8, rx_bytes as usize) };
 
-        debug!("pbuf: {:x?}", mbuf);
+            debug!("pbuf: {:x?}", mbuf);
 
             // Copy mbuf into a new Vec
             recv_packets.push(mbuf.to_vec());
@@ -1016,7 +1015,7 @@ pub fn SetupRxBds(instance_p: &mut FXmac) {
         let bdindex: u32 = FXMAC_BD_TO_INDEX(rxring, rxbd as u64);
 
         let rx_macb_dma_desc = unsafe{(rxbd as *const macb_dma_desc).read_volatile()};
-    debug!("SetupRxBds - {}: {:#010x?}", bdindex, rx_macb_dma_desc);
+        trace!("SetupRxBds - {}: {:#010x?}", bdindex, rx_macb_dma_desc);
 
         let mut v = rx_macb_dma_desc.addr & (!0x7f); // 128位对齐？
         if bdindex == (FXMAX_RX_PBUFS_LENGTH - 1) as u32 {
@@ -1042,16 +1041,18 @@ pub fn SetupRxBds(instance_p: &mut FXmac) {
 pub fn ethernetif_input_to_recv_packets(instance_p: &mut FXmac)
 {
     if(instance_p.lwipport.recv_flg > 0)
-        {
+    {
       info!("ethernetif_input_to_recv_packets, fxmac_port->recv_flg={}", instance_p.lwipport.recv_flg);
 
       // 也许需要屏蔽中断的临界区来保护
       instance_p.lwipport.recv_flg -= 1;
 
+      // 开中断
       write_reg((instance_p.config.base_address + FXMAC_IER_OFFSET) as *mut u32, instance_p.mask);
 
-            FXmacRecvHandler(instance_p);
-        }
+      // 若需要中断处理函数中来接收包，可以这里解注释
+      //FXmacRecvHandler(instance_p);
+    }
 
     {
         // move received packet into a new pbuf
@@ -1130,7 +1131,7 @@ pub fn FXmacHandleTxErrors(instance_p: &mut FXmac)
 
 fn CleanDmaTxdescs(instance_p: &mut FXmac)
 {
-    info!("Clean DMA TX DESCs");
+    warn!("Clean DMA TX DESCs");
     let txringptr: &mut FXmacBdRing = &mut instance_p.tx_bd_queue.bdring;
 
     let mut bdtemplate: FXmacBd = [0; FXMAC_BD_NUM_WORDS];
@@ -1146,6 +1147,7 @@ fn CleanDmaTxdescs(instance_p: &mut FXmac)
 
 fn FreeOnlyTxPbufs(instance_p: &mut FXmac)
 {
+    warn!("Free all TX DMA pbuf");
     for index in  0..FXMAX_TX_PBUFS_LENGTH
     {
         if (instance_p.lwipport.buffer.tx_pbufs_storage[index] != 0)
@@ -1168,7 +1170,7 @@ pub fn FXmacProcessSentBds(instance_p: &mut FXmac)
         /* obtain processed BD's */
         let n_bds: u32 = FXmacBdRingFromHwTx(txring, FXMAX_TX_PBUFS_LENGTH, &mut txbdset);
         if n_bds == 0 {
-            warn!("FXmacProcessSentBds have not found BD");
+            info!("FXmacProcessSentBds have not found BD");
             return;
         }
         /* free the processed BD's */
@@ -1177,8 +1179,7 @@ pub fn FXmacProcessSentBds(instance_p: &mut FXmac)
         while n_pbufs_freed > 0 {
             let bdindex = FXMAC_BD_TO_INDEX(txring, curbdpntr as u64) as usize;
 
-    trace!("FXmacProcessSentBds - {}: {:#010x?}", bdindex, unsafe{*(curbdpntr as *const macb_dma_desc)});
-
+            trace!("FXmacProcessSentBds - {}: {:#010x?}", bdindex, unsafe{*(curbdpntr as *const macb_dma_desc)});
             let mut v = 0;
             if bdindex == (FXMAX_TX_PBUFS_LENGTH - 1) {
                 v = 0xC0000000; /* Word 1 ,used/Wrap – marks last descriptor in transmit buffer descriptor list.*/
@@ -1218,6 +1219,7 @@ pub fn FXmacProcessSentBds(instance_p: &mut FXmac)
 
 pub fn FXmacSendHandler(instance: &mut FXmac)
 {
+    debug!("-> FXmacSendHandler");
     //let txringptr: FXmacBdRing = instance.tx_bd_queue.bdring;
     let regval: u32 = read_reg((instance.config.base_address + FXMAC_TXSR_OFFSET) as *const u32);
 
@@ -1231,6 +1233,8 @@ pub fn FXmacSendHandler(instance: &mut FXmac)
 
 pub fn FXmacLinkChange(instance: &mut FXmac)
 {
+    debug!("-> FXmacLinkChange");
+
     if instance.config.interface == FXmacPhyInterface::FXMAC_PHY_INTERFACE_MODE_SGMII
     {
         let mut link: u32 = 0;

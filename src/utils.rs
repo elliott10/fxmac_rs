@@ -219,7 +219,7 @@ pub fn dma_free_coherent(vaddr: usize, pages: usize) {
 /// 请求分配irq
 #[linkage = "weak"]
 #[unsafe(export_name = "dma_request_irq_fxmac")]
-pub fn dma_request_irq(irq: usize, handler: fn(u64)) {
+pub fn dma_request_irq(irq: usize, handler: fn()) {
     warn!("dma_request_irq_fxmac unimplemented");
     //unimplemented!()
 }

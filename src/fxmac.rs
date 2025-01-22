@@ -212,14 +212,14 @@ pub fn xmac_init(hwaddr: &[u8; 6]) -> &'static mut FXmac { // i32
     xmac.mask = FXMAC_IXR_LINKCHANGE_MASK
         | FXMAC_IXR_TX_ERR_MASK
         | FXMAC_IXR_RX_ERR_MASK
-        | FXMAC_IXR_RXCOMPL_MASK; // FXMAC_INTR_MASK
+        | FXMAC_IXR_RXCOMPL_MASK; // FXMAC_INTR_MASK // 这里打开收包中断，关闭发包中断
+
     if (xmac.config.caps & FXMAC_CAPS_TAILPTR) != 0 {
         FXmacSetOptions(&mut xmac, FXMAC_TAIL_PTR_OPTION, 0);
         xmac.mask &= !FXMAC_IXR_TXUSED_MASK;
     }
 
     // xmac.lwipport.feature = LWIP_PORT_MODE_MULTICAST_ADDRESS_FILITER;
-
     FxmacFeatureSetOptions(xmac.lwipport.feature, &mut xmac);
 
     status = FXmacSetMacAddress(&xmac.lwipport.hwaddr, 0);
@@ -268,9 +268,6 @@ pub fn xmac_init(hwaddr: &[u8; 6]) -> &'static mut FXmac { // i32
     ethernetif_start() -> FXmacLwipPortStart() -> FXmacStart()
     ethernetif_debug()
     */
-
-    /////////
-    msdelay(2000); //开始前等2s
 
     // ethernetif_start()
     // start mac
@@ -335,7 +332,7 @@ pub fn FXmacStart(instance_p: &mut FXmac) {
 
     info!("Enable TX and RX by Mask={:#x}", instance_p.mask);
 
-    // Enable TX and RX interrupt
+    // 使能网卡中断: Enable TX and RX interrupt
     //FXMAC_INT_ENABLE(instance_p, instance_p->mask);
     // Enable interrupts specified in 'Mask'. The corresponding interrupt for each bit set to 1 in 'Mask', will be enabled.
     write_reg(

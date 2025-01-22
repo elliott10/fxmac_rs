@@ -59,7 +59,7 @@ pub const FXMAC3_QUEUE3_IRQ_NUM:u32 = (73 + 30);
 
 pub fn FXmacErrorHandler(instance_p: &mut FXmac, direction: u8, error_word: u32)
 {
-    info!("FXmacErrorHandler, direction={}, error_word={}", direction, error_word);
+    debug!("-> FXmacErrorHandler, direction={}, error_word={}", direction, error_word);
     if error_word != 0
     {
         match direction as u32
@@ -73,12 +73,12 @@ pub fn FXmacErrorHandler(instance_p: &mut FXmac, direction: u8, error_word: u32)
             if (error_word & FXMAC_RXSR_RXOVR_MASK) != 0
             {
                 error!("Receive over run");
-                FXmacRecvHandler(instance_p);
+                //FXmacRecvHandler(instance_p);
             }
             if (error_word & FXMAC_RXSR_BUFFNA_MASK) != 0
             {
                 error!("Receive buffer not available");
-                FXmacRecvHandler(instance_p);
+                //FXmacRecvHandler(instance_p);
             }
         }
          FXMAC_SEND => {
@@ -114,18 +114,19 @@ pub fn FXmacErrorHandler(instance_p: &mut FXmac, direction: u8, error_word: u32)
 }
 
 pub fn FXmacRecvIsrHandler(instance: &mut FXmac) {
-    info!("Recv Isr");
+    debug!("-> FXmacRecvIsrHandler");
+    // 关中断
     write_reg((instance.config.base_address + FXMAC_IDR_OFFSET) as *mut u32, FXMAC_IXR_RXCOMPL_MASK);
     instance.lwipport.recv_flg += 1;
 
     ethernetif_input_to_recv_packets(instance);
+    // 处理后会开中断
 }
 
 pub static XMAC: AtomicPtr<FXmac> = AtomicPtr::new(core::ptr::null_mut());
 
-pub fn xmac_intr_handler(intr: u64) {
-
-    info!("Handling xmac intr ...");
+pub fn xmac_intr_handler() {
+    debug!("Handling xmac intr ...");
 
     let xmac = XMAC.load(Ordering::Relaxed);
     if !xmac.is_null() {
@@ -134,7 +135,8 @@ pub fn xmac_intr_handler(intr: u64) {
          // maybe irq num
          let vector = xmac_ptr.config.queue_irq_num[0] ;
          FXmacIntrHandler(vector as i32, xmac_ptr);
-    info!("xmac intr is already handled");
+
+         info!("xmac intr is already handled");
 } else {
     error!("static FXmac has not been initialized");
 }
@@ -164,7 +166,7 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
       */
      let mut reg_isr: u32 = read_reg((instance_p.config.base_address + FXMAC_ISR_OFFSET) as *const u32);
 
-     info!("<<<<<<<<< IRQ num vector={}, Interrupt Status ISR={:#x}, tx_queue_id={}, rx_queue_id={}", vector, reg_isr, tx_queue_id, rx_queue_id);
+     info!("+++++++++ IRQ num vector={}, Interrupt Status ISR={:#x}, tx_queue_id={}, rx_queue_id={}", vector, reg_isr, tx_queue_id, rx_queue_id);
  
      if vector as u32 == instance_p.config.queue_irq_num[tx_queue_id as usize] {
          if tx_queue_id == 0
@@ -433,7 +435,9 @@ pub fn FXmacSetupIsr(instance: &mut FXmac)
 
     // setup interrupt handler, 该函数将自定义中断回调函数注册到对应的中断ID
     // 使能对应中断
-    let irq_num = instance.config.queue_irq_num[0] as usize;
+    let irq_num = instance.config.queue_irq_num[0] as usize; // 32 + 55
+
+    // SPI(Shared Peripheral Interrupt) rang: 32..1020
     info!("register callback function for irq: {}", irq_num);
     crate::utils::dma_request_irq(irq_num, xmac_intr_handler);
 
