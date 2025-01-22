@@ -11,12 +11,11 @@ use crate::fxmac::*;
 use crate::utils::*;
 
 // fxmac_lwip_port.h
-pub const FXMAX_RX_BDSPACE_LENGTH: usize =   0x20000; /* default set 128KB*/
-pub const FXMAX_TX_BDSPACE_LENGTH: usize =   0x20000; /* default set 128KB*/
+pub const FXMAX_RX_BDSPACE_LENGTH: usize = FXMAX_RX_PBUFS_LENGTH * 64; // 0x20000, default set 128KB
+pub const FXMAX_TX_BDSPACE_LENGTH: usize = FXMAX_RX_PBUFS_LENGTH * 64; // 0x20000, default set 128KB
 
-
-pub const FXMAX_RX_PBUFS_LENGTH: usize = 128;
-pub const FXMAX_TX_PBUFS_LENGTH: usize = 128;
+pub const FXMAX_RX_PBUFS_LENGTH: usize = 8; // 128
+pub const FXMAX_TX_PBUFS_LENGTH: usize = 8;
 
 pub const FXMAX_MAX_HARDWARE_ADDRESS_LENGTH: usize =6;
 
@@ -619,7 +618,7 @@ pub fn FXmacBdRingFromHwRx(ring_ptr: &mut FXmacBdRing, bd_limit: usize, bd_set_p
             if bd_rx_new == 0 {
                 break;
             }
-            debug!("FXMAC_RXBUF_NEW_MASK got {:#x}", bd_rx_new);
+            //debug!("FXMAC_RXBUF_NEW_MASK got {:#x}", bd_rx_new);
 
             bd_count += 1;
 
@@ -686,7 +685,7 @@ pub fn FXmacBdRingFromHwTx(ring_ptr: &mut FXmacBdRing, bd_limit: usize, bd_set_p
     /* If no BDs in work group, then there's nothing to search */
     if ring_ptr.hw_cnt == 0
     {
-        warn!("No BDs in TX work group, then there's nothing to search");
+        debug!("No BDs in TX work group, then there's nothing to search");
         *bd_set_ptr = null_mut();
         status = 0;
     } else {
@@ -761,7 +760,7 @@ pub fn FXmacLwipPortTx(instance: &mut FXmac, pbuf: Vec<Vec<u8>>) -> i32
 
     // check if space is available to send
     let freecnt = (instance.tx_bd_queue.bdring).free_cnt;
-    if freecnt <= 124 { //5
+    if freecnt <= 4 { //5
         info!("TX freecnt={}, let's process sent BDs", freecnt);
         FXmacProcessSentBds(instance);
     }
@@ -816,9 +815,9 @@ pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
         let pbuf = unsafe { from_raw_parts_mut(pbufs_virt as *mut u8, pbufs_len) };
         pbuf.copy_from_slice(q);
         crate::utils::FCacheDCacheFlushRange(pbufs_virt, pbufs_len as u64);
-        warn!(">>>>>>>>> TX PKT {} @{:#x} - {}", pbufs_len, pbufs_virt, bdindex);
+         warn!(">>>>>>>>> TX PKT {} @{:#x} - {}", pbufs_len, pbufs_virt, bdindex);
 
-        debug!("pbuf: {:x?}", pbuf);
+        debug!(">>>>>>>>> {:x?}", pbuf);
 
         //fxmac_bd_set_address_tx(txbd as u64, (pbufs_virt & 0xffff_ffff) as u64);
         send_len += pbufs_len as u32;
@@ -1012,20 +1011,23 @@ pub fn SetupRxBds(instance_p: &mut FXmac) {
 
         // 继续使用前面申请过的dma pbufs, 不再清理并重新申请
         //let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_rx_buffer_pages);
-
         //crate::utils::FCacheDCacheInvalidateRange(rx_mbufs_vaddr as u64, max_frame_size as u64);
 
         let bdindex: u32 = FXMAC_BD_TO_INDEX(rxring, rxbd as u64);
-        let mut temp = rxbd as *mut u32;
-        let mut v = 0;
+
+        let rx_macb_dma_desc = unsafe{(rxbd as *const macb_dma_desc).read_volatile()};
+    debug!("SetupRxBds - {}: {:#010x?}", bdindex, rx_macb_dma_desc);
+
+        let mut v = rx_macb_dma_desc.addr & (!0x7f); // 128位对齐？
         if bdindex == (FXMAX_RX_PBUFS_LENGTH - 1) as u32 {
             // Mask last descriptor in receive buffer list
-            v = 0x2;
+            v |= FXMAC_RXBUF_WRAP_MASK;
         }
+        
+        let mut temp = rxbd as *mut u32;
         unsafe {
-        temp.write_volatile(v);
-        // Clear word 1 in  descriptor
-        temp.add(1).write_volatile(0);
+        temp.add(1).write_volatile(0); // clear rx ctl
+        temp.write_volatile(v); // set rx addr
         }
         crate::utils::DSB();
 
@@ -1175,7 +1177,7 @@ pub fn FXmacProcessSentBds(instance_p: &mut FXmac)
         while n_pbufs_freed > 0 {
             let bdindex = FXMAC_BD_TO_INDEX(txring, curbdpntr as u64) as usize;
 
-    info!("FXmacProcessSentBds - {}: {:#010x?}", bdindex, unsafe{*(curbdpntr as *const macb_dma_desc)});
+    trace!("FXmacProcessSentBds - {}: {:#010x?}", bdindex, unsafe{*(curbdpntr as *const macb_dma_desc)});
 
             let mut v = 0;
             if bdindex == (FXMAX_TX_PBUFS_LENGTH - 1) {
