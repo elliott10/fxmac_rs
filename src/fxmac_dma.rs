@@ -752,26 +752,6 @@ pub fn FXmacBdRingFromHwTx(ring_ptr: &mut FXmacBdRing, bd_limit: usize, bd_set_p
     status
 }
 
-pub fn FXmacLwipPortTx(instance: &mut FXmac, pbuf: Vec<Vec<u8>>) -> i32
-{
-    info!("TX transmit packets");
-    // 发送网络包时注意屏蔽下中断
-
-    // check if space is available to send
-    let freecnt = (instance.tx_bd_queue.bdring).free_cnt;
-    if freecnt <= 4 { //5
-        info!("TX freecnt={}, let's process sent BDs", freecnt);
-        FXmacProcessSentBds(instance);
-    }
-
-    if (instance.tx_bd_queue.bdring).free_cnt != 0 {
-        FXmacSgsend(instance, pbuf) as i32
-    }else{
-        error!(" TX packets dropped, no space");
-        -3 // FREERTOS_XMAC_NO_VALID_SPACE
-    }
-}
-
 /// 发包函数
 pub fn FXmacSgsend(instance_p: &mut FXmac, p: Vec<Vec<u8>>) -> u32 {
     let mut status: u32 = 0;
@@ -1038,30 +1018,6 @@ pub fn SetupRxBds(instance_p: &mut FXmac) {
     }
 }
 
-pub fn ethernetif_input_to_recv_packets(instance_p: &mut FXmac)
-{
-    if(instance_p.lwipport.recv_flg > 0)
-    {
-      info!("ethernetif_input_to_recv_packets, fxmac_port->recv_flg={}", instance_p.lwipport.recv_flg);
-
-      // 也许需要屏蔽中断的临界区来保护
-      instance_p.lwipport.recv_flg -= 1;
-
-      // 开中断
-      write_reg((instance_p.config.base_address + FXMAC_IER_OFFSET) as *mut u32, instance_p.mask);
-
-      // 若需要中断处理函数中来接收包，可以这里解注释
-      //FXmacRecvHandler(instance_p);
-    }
-
-    {
-        // move received packet into a new pbuf
-        //p = low_level_input(netif);
-        // IP or ARP packet
-        // full packet send to tcpip thread to process
-    }
-}
-
 /// FXmacBdRingFree, Frees a set of BDs that had been previously retrieved with
 pub fn FXmacBdRingFree(ring_ptr: &mut FXmacBdRing, num_bd: u32) -> u32 {
 
@@ -1309,4 +1265,47 @@ pub fn phy_autoneg_status(xmac_p: &mut FXmac, phy_addr: u32) -> u32
     }
 
     0
+}
+
+pub fn FXmacLwipPortTx(instance: &mut FXmac, pbuf: Vec<Vec<u8>>) -> i32 {
+    info!("TX transmit packets");
+    // 发送网络包时注意屏蔽下中断
+
+    // check if space is available to send
+    let freecnt = (instance.tx_bd_queue.bdring).free_cnt;
+    if freecnt <= 4 { //5
+        info!("TX freecnt={}, let's process sent BDs", freecnt);
+        FXmacProcessSentBds(instance);
+    }
+
+    if (instance.tx_bd_queue.bdring).free_cnt != 0 {
+        FXmacSgsend(instance, pbuf) as i32
+    }else{
+        error!(" TX packets dropped, no space");
+        -3 // FREERTOS_XMAC_NO_VALID_SPACE
+    }
+}
+
+pub fn ethernetif_input_to_recv_packets(instance_p: &mut FXmac)
+{
+    if(instance_p.lwipport.recv_flg > 0)
+    {
+      info!("ethernetif_input_to_recv_packets, fxmac_port->recv_flg={}", instance_p.lwipport.recv_flg);
+
+      // 也许需要屏蔽中断的临界区来保护
+      instance_p.lwipport.recv_flg -= 1;
+
+      // 开中断
+      write_reg((instance_p.config.base_address + FXMAC_IER_OFFSET) as *mut u32, instance_p.mask);
+
+      // 若需要中断处理函数中来接收包，可以这里解注释
+      //FXmacRecvHandler(instance_p);
+    }
+
+    {
+        // move received packet into a new pbuf
+        //p = low_level_input(netif);
+        // IP or ARP packet
+        // full packet send to tcpip thread to process
+    }
 }

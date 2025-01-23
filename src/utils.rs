@@ -7,15 +7,6 @@ pub const CORE2_AFF: u64 = 0x00;
 pub const CORE3_AFF: u64 = 0x100;
 pub const FCORE_NUM: u64 = 4;
 
-/// Read reg: MPIDR_EL1
-pub(crate) fn read_mpidr() -> u64 {
-    let mut reg_r = 0; 
-    unsafe {
-        core::arch::asm!("mrs {}, MPIDR_EL1", out(reg) reg_r);
-    }    
-    reg_r
-}
-
 /// Converts MPIDR to CPU ID
 pub(crate) fn mpidr2cpuid(mpidr: u64) -> usize {
     // RK3588
@@ -37,20 +28,31 @@ pub(crate) fn mpidr2cpuid(mpidr: u64) -> usize {
     }
 }
 
+#[inline]
+/// Read reg: MPIDR_EL1
+fn read_mpidr() -> u64 {
+    let mut reg_r = 0; 
+    unsafe {
+        core::arch::asm!("mrs {}, MPIDR_EL1", out(reg) reg_r);
+    }    
+    reg_r
+}
+
 pub(crate) fn get_cpu_id() -> usize {
     let mpidr = read_mpidr();
     mpidr2cpuid(mpidr)
 }
 
 /// Data Synchronization Barrier
-pub fn DSB() {
+pub(crate) fn DSB() {
     unsafe {
         core::arch::asm!("dsb sy");
     }    
 }
 
+#[inline]
 // pseudo assembler instructions 
-pub fn MFCPSR() -> u32{
+fn MFCPSR() -> u32{
     let mut rval: u32 = 0;
 unsafe {
     asm!("mrs {0:x}, DAIF", out(reg) rval);
@@ -58,20 +60,21 @@ unsafe {
     rval
 }
 
-    
-pub fn MTCPSR(val: u32) {
+#[inline]
+fn MTCPSR(val: u32) {
 unsafe {
     asm!("msr DAIF, {0:x}", in(reg) val);
 }
 }
-
-pub fn MTCPDC_CIVAC(adr: u64) {
+#[inline]
+fn MTCPDC_CIVAC(adr: u64) {
     unsafe {
         asm!("dc CIVAC, {}", in(reg) adr);
     }
 }
 
-pub fn MTCPDC_CVAC(adr: u64) {
+#[inline]
+fn MTCPDC_CVAC(adr: u64) {
     unsafe {
         asm!("dc CVAC, {}", in(reg) adr);
     }
@@ -87,7 +90,7 @@ pub const IRQ_FIQ_MASK: u32 = 0xC0;
 /// dc civac, virt_addr 通过虚拟地址清除和无效化cache
 /// adr: 64bit start address of the range to be invalidated.
 /// len: Length of the range to be invalidated in bytes.
-pub fn FCacheDCacheInvalidateRange(mut adr: u64, len: u64)
+pub(crate) fn FCacheDCacheInvalidateRange(mut adr: u64, len: u64)
 {
    let end: u64 = adr + len;
    adr = adr & (!CACHE_LINE_ADDR_MASK);
@@ -108,7 +111,7 @@ pub fn FCacheDCacheInvalidateRange(mut adr: u64, len: u64)
 /// Flush Data cache
 /// DC CVAC, Virtual address to use. No alignment restrictions apply to vaddr
 /// adr: 64bit start address of the range to be flush.
-pub fn FCacheDCacheFlushRange(mut adr: u64, len: u64)
+pub(crate) fn FCacheDCacheFlushRange(mut adr: u64, len: u64)
 {
     let end: u64 = adr + len;
     adr = adr & (!CACHE_LINE_ADDR_MASK);
@@ -131,29 +134,29 @@ use aarch64_cpu::registers::{CNTVCT_EL0, CNTFRQ_EL0, Readable};
 use alloc::boxed::Box;
 
 #[inline]
-pub fn now_tsc() -> u64 {
+fn now_tsc() -> u64 {
     CNTVCT_EL0.get()
 }
 
 #[inline]
-pub fn timer_freq() -> u64 {
+fn timer_freq() -> u64 {
     CNTFRQ_EL0.get() as u64
 }
 
 // 纳秒(ns)
 #[inline]
-pub fn now_ns() -> u64 {
+pub(crate) fn now_ns() -> u64 {
     let freq = timer_freq();
     now_tsc() * (1_000_000_000 / freq)
 }
 
-pub fn ticks_to_nanos(ticks: u64) -> u64 {
+pub(crate) fn ticks_to_nanos(ticks: u64) -> u64 {
     let freq = timer_freq();
     ticks * (1_000_000_000 / freq)
 }
 
 // 微秒(us)
-pub fn usdelay(us: u64) {
+pub(crate) fn usdelay(us: u64) {
     let mut current_ticks: u64 = now_tsc();
     let delay2 = current_ticks + us * (timer_freq() / 1000000);
 
@@ -166,20 +169,22 @@ pub fn usdelay(us: u64) {
 }
 
 // 毫秒(ms)
-#[allow(unused)]
-pub fn msdelay(ms: u64) {
+pub(crate) fn msdelay(ms: u64) {
     usdelay(ms * 1000);
 }
+
+/// 虚拟地址转换成物理地址
 #[linkage = "weak"]
 #[unsafe(export_name = "virt_to_phys_fxmac")]
-pub fn virt_to_phys(addr: usize) -> usize {
+pub(crate) fn virt_to_phys(addr: usize) -> usize {
     debug!("fxmac: virt_to_phys_fxmac {:#x}", addr);
     addr
 }
 
+/// 物理地址转换成虚拟地址
 #[linkage = "weak"]
 #[unsafe(export_name = "phys_to_virt_fxmac")]
-pub fn phys_to_virt(addr: usize) -> usize {
+pub(crate) fn phys_to_virt(addr: usize) -> usize {
     debug!("fxmac: phys_to_virt_fxmac {:#x}", addr);
     addr
 }
@@ -187,7 +192,7 @@ pub fn phys_to_virt(addr: usize) -> usize {
 /// 申请DMA连续内存页
 #[linkage = "weak"]
 #[unsafe(export_name = "dma_alloc_coherent_fxmac")]
-pub fn dma_alloc_coherent(pages: usize) -> (usize, usize) {
+pub(crate) fn dma_alloc_coherent(pages: usize) -> (usize, usize) {
     let paddr: Box<[u32]> = if pages == 1 {
         Box::new([0; 1024]) // 4096
     } else if pages == 8 {
@@ -210,7 +215,7 @@ pub fn dma_alloc_coherent(pages: usize) -> (usize, usize) {
 /// 释放DMA内存页
 #[linkage = "weak"]
 #[unsafe(export_name = "dma_free_coherent_fxmac")]
-pub fn dma_free_coherent(vaddr: usize, pages: usize) {
+pub(crate) fn dma_free_coherent(vaddr: usize, pages: usize) {
     debug!("fxmac: dma free vaddr: {:#x}, pages={}", vaddr, pages);
     let palloc = vaddr as *mut [u32; 1024];
     unsafe{ drop(Box::from_raw(palloc)); }
@@ -219,7 +224,7 @@ pub fn dma_free_coherent(vaddr: usize, pages: usize) {
 /// 请求分配irq
 #[linkage = "weak"]
 #[unsafe(export_name = "dma_request_irq_fxmac")]
-pub fn dma_request_irq(irq: usize, handler: fn()) {
+pub(crate) fn dma_request_irq(irq: usize, handler: fn()) {
     warn!("dma_request_irq_fxmac unimplemented");
     //unimplemented!()
 }

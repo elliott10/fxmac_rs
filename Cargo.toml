@@ -6,13 +6,16 @@ authors = ["xiaoluoyuan@163.com"]
 version = "0.1.0"
 edition = "2024"
 license = "GPL-2.0"
-description = "fxmac_rs ethernet rust driver on SiFive FU740 board."
-homepage = "https://github.com/elliott10/cadence-macb.git"
-documentation = "https://github.com/elliott10/cadence-macb/blob/main/README.md"
-repository = "https://github.com/elliott10/cadence-macb.git"
+description = "fxmac ethernet driver in Rust on PhytiumPi board."
+homepage = "https://github.com/elliott10/fxmac_rs.git"
+documentation = "https://github.com/elliott10/fxmac_rs/blob/main/README.md"
+repository = "https://github.com/elliott10/fxmac_rs.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 log = "0.4"
+
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
 aarch64-cpu = "10"

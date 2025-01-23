@@ -57,72 +57,6 @@ pub const FXMAC3_QUEUE3_IRQ_NUM:u32 = (73 + 30);
 //pub const FXMAC_PHY_MAX_NUM:u32 = 32;
 // #define FXMAC_CLK_TYPE_0
 
-pub fn FXmacErrorHandler(instance_p: &mut FXmac, direction: u8, error_word: u32)
-{
-    debug!("-> FXmacErrorHandler, direction={}, error_word={}", direction, error_word);
-    if error_word != 0
-    {
-        match direction as u32
-        {
-         FXMAC_RECV => {
-            if (error_word & FXMAC_RXSR_HRESPNOK_MASK) != 0
-            {
-                error!("Receive DMA error");
-                FXmacHandleDmaTxError(instance_p);
-            }
-            if (error_word & FXMAC_RXSR_RXOVR_MASK) != 0
-            {
-                error!("Receive over run");
-                //FXmacRecvHandler(instance_p);
-            }
-            if (error_word & FXMAC_RXSR_BUFFNA_MASK) != 0
-            {
-                error!("Receive buffer not available");
-                //FXmacRecvHandler(instance_p);
-            }
-        }
-         FXMAC_SEND => {
-            if (error_word & FXMAC_TXSR_HRESPNOK_MASK) != 0
-            {
-                error!("Transmit DMA error");
-                FXmacHandleDmaTxError(instance_p);
-            }
-            if (error_word & FXMAC_TXSR_URUN_MASK) != 0
-            {
-                error!("Transmit under run");
-                FXmacHandleTxErrors(instance_p);
-            }
-            if (error_word & FXMAC_TXSR_BUFEXH_MASK) != 0
-            {
-                error!("Transmit buffer exhausted");
-                FXmacHandleTxErrors(instance_p);
-            }
-            if (error_word & FXMAC_TXSR_RXOVR_MASK) != 0
-            {
-                error!("Transmit retry excessed limits");
-                FXmacHandleTxErrors(instance_p);
-            }
-            if (error_word & FXMAC_TXSR_FRAMERX_MASK) != 0
-            {
-                error!("Transmit collision");
-                FXmacProcessSentBds(instance_p);
-            }
-        }
-         _ => { error!("FXmacErrorHandler failed, unknown direction={}", direction); }
-        }
-    }
-}
-
-pub fn FXmacRecvIsrHandler(instance: &mut FXmac) {
-    debug!("-> FXmacRecvIsrHandler");
-    // 关中断
-    write_reg((instance.config.base_address + FXMAC_IDR_OFFSET) as *mut u32, FXMAC_IXR_RXCOMPL_MASK);
-    instance.lwipport.recv_flg += 1;
-
-    ethernetif_input_to_recv_packets(instance);
-    // 处理后会开中断
-}
-
 pub static XMAC: AtomicPtr<FXmac> = AtomicPtr::new(core::ptr::null_mut());
 
 pub fn xmac_intr_handler() {
@@ -413,6 +347,72 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
 
      }
  }
+ 
+pub fn FXmacErrorHandler(instance_p: &mut FXmac, direction: u8, error_word: u32)
+{
+    debug!("-> FXmacErrorHandler, direction={}, error_word={}", direction, error_word);
+    if error_word != 0
+    {
+        match direction as u32
+        {
+         FXMAC_RECV => {
+            if (error_word & FXMAC_RXSR_HRESPNOK_MASK) != 0
+            {
+                error!("Receive DMA error");
+                FXmacHandleDmaTxError(instance_p);
+            }
+            if (error_word & FXMAC_RXSR_RXOVR_MASK) != 0
+            {
+                error!("Receive over run");
+                //FXmacRecvHandler(instance_p);
+            }
+            if (error_word & FXMAC_RXSR_BUFFNA_MASK) != 0
+            {
+                error!("Receive buffer not available");
+                //FXmacRecvHandler(instance_p);
+            }
+        }
+         FXMAC_SEND => {
+            if (error_word & FXMAC_TXSR_HRESPNOK_MASK) != 0
+            {
+                error!("Transmit DMA error");
+                FXmacHandleDmaTxError(instance_p);
+            }
+            if (error_word & FXMAC_TXSR_URUN_MASK) != 0
+            {
+                error!("Transmit under run");
+                FXmacHandleTxErrors(instance_p);
+            }
+            if (error_word & FXMAC_TXSR_BUFEXH_MASK) != 0
+            {
+                error!("Transmit buffer exhausted");
+                FXmacHandleTxErrors(instance_p);
+            }
+            if (error_word & FXMAC_TXSR_RXOVR_MASK) != 0
+            {
+                error!("Transmit retry excessed limits");
+                FXmacHandleTxErrors(instance_p);
+            }
+            if (error_word & FXMAC_TXSR_FRAMERX_MASK) != 0
+            {
+                error!("Transmit collision");
+                FXmacProcessSentBds(instance_p);
+            }
+        }
+         _ => { error!("FXmacErrorHandler failed, unknown direction={}", direction); }
+        }
+    }
+}
+
+pub fn FXmacRecvIsrHandler(instance: &mut FXmac) {
+    debug!("-> FXmacRecvIsrHandler");
+    // 关中断
+    write_reg((instance.config.base_address + FXMAC_IDR_OFFSET) as *mut u32, FXMAC_IXR_RXCOMPL_MASK);
+    instance.lwipport.recv_flg += 1;
+
+    ethernetif_input_to_recv_packets(instance);
+    // 处理后会开中断
+}
 
  /// 网卡中断设置
 pub fn FXmacSetupIsr(instance: &mut FXmac)
