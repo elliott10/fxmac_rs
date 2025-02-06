@@ -215,14 +215,12 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
              }
  
              /* Receive error conditions interrupt */
-             if ((reg_isr & FXMAC_IXR_RX_ERR_MASK) != 0)
-             {
+             if (reg_isr & FXMAC_IXR_RX_ERR_MASK) != 0 {
                  /* Clear RX status register */
                  let mut reg_rxsr: u32 = read_reg((instance_p.config.base_address + FXMAC_RXSR_OFFSET) as *const u32);
                  write_reg((instance_p.config.base_address + FXMAC_RXSR_OFFSET) as *mut u32, reg_rxsr);
 
-                 if ((reg_isr & FXMAC_IXR_RXUSED_MASK) != 0)
-                 {
+                 if (reg_isr & FXMAC_IXR_RXUSED_MASK) != 0 {
                      let reg_ctrl: u32 = read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32);
 
                      let mut reg_temp: u32 = reg_ctrl | FXMAC_NWCTRL_FLUSH_DPRAM_MASK as u32;
@@ -240,32 +238,20 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
                  }
  
                  /* add */
-                 if ((reg_isr & FXMAC_IXR_RXOVR_MASK) != 0)
-                 {
-                     if(instance_p.caps& FXMAC_CAPS_ISR_CLEAR_ON_WRITE) != 0
-                     {
+                 if ((reg_isr & FXMAC_IXR_RXOVR_MASK) != 0) && ((instance_p.caps & FXMAC_CAPS_ISR_CLEAR_ON_WRITE) != 0) {
                          write_reg((instance_p.config.base_address + FXMAC_ISR_OFFSET) as *mut u32, FXMAC_IXR_RXOVR_MASK);
-                     }
                  }
  
                  /* add */
-                 if ((reg_isr & FXMAC_IXR_HRESPNOK_MASK) != 0)
-                 {
-                     if(instance_p.caps& FXMAC_CAPS_ISR_CLEAR_ON_WRITE) != 0
-                     {
+                 if ((reg_isr & FXMAC_IXR_HRESPNOK_MASK) != 0) && ((instance_p.caps& FXMAC_CAPS_ISR_CLEAR_ON_WRITE) != 0) {
                          write_reg((instance_p.config.base_address + FXMAC_ISR_OFFSET) as *mut u32, FXMAC_IXR_HRESPNOK_MASK);
-                     }
                  }
  
- 
-                 if (reg_rxsr != 0)
-                 {
+                 if reg_rxsr != 0 {
                     FXmacErrorHandler(instance_p, FXMAC_RECV as u8, reg_rxsr);
                  }
              }
-         }
-         else /* use queue number more than 0 */
-         {
+         } else { /* use queue number more than 0 */
              reg_isr = read_reg((instance_p.config.base_address + FXMAC_QUEUE_REGISTER_OFFSET(FXMAC_INTQ1_STS_OFFSET, rx_queue_id)) as *const u32);
  
              /* Receive complete interrupt */

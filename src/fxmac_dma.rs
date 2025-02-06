@@ -1,5 +1,6 @@
 use core::cmp::min;
 use core::ptr::{null_mut, null};
+use core::mem::size_of;
 use core::slice::from_raw_parts_mut;
 
 use alloc::boxed::Box;
@@ -89,7 +90,7 @@ pub type FXmacBd = [u32; FXMAC_BD_NUM_WORDS];
 // sizeof(uintptr)=8
 pub type uintptr = u64;
 
-/// Enable tail Register
+// Enable tail Register
 //pub const FXMAC_TAIL_ENABLE: u32 = 0xe7c;
 
 /// send direction
@@ -887,7 +888,7 @@ pub fn FXmacRecvHandler(instance_p: &mut FXmac) -> Option<Vec<Vec<u8>>> {
     loop {
         // Returns a set of BD(s) that have been processed by hardware.
         let bd_processed: u32 = FXmacBdRingFromHwRx(&mut instance_p.rx_bd_queue.bdring, FXMAX_RX_PBUFS_LENGTH, &mut rxbdset);
-        if bd_processed <= 0
+        if bd_processed == 0
         {
             // 没有待收的网络包了
             break;

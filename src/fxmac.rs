@@ -683,25 +683,25 @@ fn FXmacClkDivGet(instance_p: &mut FXmac) -> u32 {
     let pclk_hz = instance_p.config.pclk_hz; // FXMAC0_PCLK;
 
     if (pclk_hz <= 20000000) {
-        return FXMAC_NWCFG_CLOCK_DIV8_MASK;
+        FXMAC_NWCFG_CLOCK_DIV8_MASK
     } else if (pclk_hz <= 40000000) {
-        return FXMAC_NWCFG_CLOCK_DIV16_MASK;
+        FXMAC_NWCFG_CLOCK_DIV16_MASK
     } else if (pclk_hz <= 80000000) {
-        return FXMAC_NWCFG_CLOCK_DIV32_MASK;
+        FXMAC_NWCFG_CLOCK_DIV32_MASK
     } else if (instance_p.moudle_id >= 2) {
         if (pclk_hz <= 120000000) {
-            return FXMAC_NWCFG_CLOCK_DIV48_MASK;
+            FXMAC_NWCFG_CLOCK_DIV48_MASK
         } else if (pclk_hz <= 160000000) {
-            return FXMAC_NWCFG_CLOCK_DIV64_MASK;
+            FXMAC_NWCFG_CLOCK_DIV64_MASK
         } else if (pclk_hz <= 240000000) {
-            return FXMAC_NWCFG_CLOCK_DIV96_MASK;
+            FXMAC_NWCFG_CLOCK_DIV96_MASK
         } else if (pclk_hz <= 320000000) {
-            return FXMAC_NWCFG_CLOCK_DIV128_MASK;
+            FXMAC_NWCFG_CLOCK_DIV128_MASK
         } else {
-            return FXMAC_NWCFG_CLOCK_DIV224_MASK;
+            FXMAC_NWCFG_CLOCK_DIV224_MASK
         }
     } else {
-        return FXMAC_NWCFG_CLOCK_DIV64_MASK;
+        FXMAC_NWCFG_CLOCK_DIV64_MASK
     }
 }
 

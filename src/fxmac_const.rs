@@ -1,5 +1,5 @@
 ////////////////////
-/// fxmac_hw.h
+// fxmac_hw.h
 
 pub(crate) const FXMAC_RX_BUF_UNIT:u32 = 64; /* Number of receive buffer bytes as a unit, this is HW setup */
 
@@ -541,7 +541,7 @@ pub const fn GENMASK(h:u32, l: u32) -> u32 {
 }
 
 ////////////////////
-/// fxmac.h
+// fxmac.h
 
 pub(crate) const FXMAC_PROMISC_OPTION:u32 = 0x00000001;
 /* Accept all incoming packets.
