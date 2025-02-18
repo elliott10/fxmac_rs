@@ -5,30 +5,31 @@ fxmac ethernet driver in Rust on PhytiumPi board.
 
 * Initialize ethernet driver
 ```
-/// 虚拟地址转换成物理地址
-#[no_mangle]
-pub fn virt_to_phys_fxmac(addr: usize) -> usize {
-}
+pub struct FXmacDriver;
 
-/// 物理地址转换成虚拟地址
-#[no_mangle]
-pub fn phys_to_virt_fxmac(addr: usize) -> usize {
-}
+#[crate_interface::impl_interface]
+impl axdriver_net::fxmac::KernelFunc for FXmacDriver{
+	/// 虚拟地址转换成物理地址
+	fn virt_to_phys(addr: usize) -> usize {
+	}
 
-/// 使能并注册网卡中断
-#[no_mangle]
-pub fn dma_request_irq_fxmac(irq: usize, handler: fn()) {
-}
+	/// 物理地址转换成虚拟地址
+	fn phys_to_virt(addr: usize) -> usize {
+	}
 
-/// 申请页对齐的DMA连续内存页
-/// 返回((cpu virtual address, dma physical address))
-#[no_mangle]
-pub fn dma_alloc_coherent_fxmac(pages: usize) -> (usize, usize) {
-}
+	/// 申请页对齐的DMA连续内存页
+	/// 返回((cpu virtual address, dma physical address))
+	fn dma_alloc_coherent(pages: usize) -> (usize, usize) {
+	}
 
-/// 释放DMA内存页
-#[no_mangle]
-fn dma_free_coherent_fxmac(vaddr: usize, pages: usize) {
+	/// 释放DMA内存页
+	fn dma_free_coherent(vaddr: usize, pages: usize) {
+	}
+
+	/// 使能并注册网卡中断
+	fn dma_request_irq(_irq: usize, _handler: fn()) {
+		warn!("unimplemented dma_request_irq for fxmax");
+	}
 }
 
 let hwaddr: [u8; 6] = [0x55, 0x44, 0x33, 0x22, 0x11, 0x00];
@@ -53,6 +54,7 @@ let recv_packets = FXmacRecvHandler(fxmac_device);
 ```
 cargo build --target=aarch64-unknown-none-softfloat
 ```
+
 ## About ethernet
 PHY: Motorcomm YT8521
 
