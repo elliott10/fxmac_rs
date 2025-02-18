@@ -160,7 +160,7 @@ pub fn FXmacPhyInit(
     speed,
         duplex_mode,
         autonegotiation_en,
-        reset_flag,
+        reset_flag
     );
     let mut ret: u32 = 0;
     let mut phy_addr: u32 = 0;

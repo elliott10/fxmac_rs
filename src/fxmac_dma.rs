@@ -5,7 +5,6 @@ use core::slice::from_raw_parts_mut;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use log::*;
 use crate::fxmac_const::*;
 use crate::fxmac_phy::*;
 use crate::fxmac::*;
@@ -159,10 +158,10 @@ impl Default for FXmacNetifBuffer {
     fn default() -> Self {
 
         let alloc_pages = (FXMAX_RX_BDSPACE_LENGTH + (PAGE_SIZE - 1)) / PAGE_SIZE;
-        let (mut rx_vaddr, mut rx_dma) = crate::utils::dma_alloc_coherent(alloc_pages);
+        let (mut rx_vaddr, mut rx_dma) = crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_pages));
 
         let alloc_pages = (FXMAX_TX_BDSPACE_LENGTH + (PAGE_SIZE - 1)) / PAGE_SIZE;
-        let (mut tx_vaddr, mut tx_dma) = crate::utils::dma_alloc_coherent(alloc_pages);
+        let (mut tx_vaddr, mut tx_dma) = crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_pages));
 
         //let rx_buf = unsafe { from_raw_parts_mut(vaddr as *mut u8, FXMAX_RX_BDSPACE_LENGTH) };
 
@@ -187,13 +186,13 @@ pub struct FXmacLwipPort
 
 pub fn fxmac_bd_read(bd_ptr: u64, offset: u32) -> u32 {
     trace!("fxmac_bd_read at {:#x}", bd_ptr + offset as u64);
-    read_reg((virt_to_phys(bd_ptr as usize) + offset as usize) as *const u32)
+    read_reg((crate_interface::call_interface!(crate::KernelFunc::virt_to_phys(bd_ptr as usize)) + offset as usize) as *const u32)
 }
 pub fn fxmac_bd_write(bd_ptr: u64, offset: u32, data: u32)
 {
     debug!("fxmac_bd_write {:#x} to {:#x}", data, bd_ptr + offset as u64);
     // uintptr: u64
-    write_reg((virt_to_phys(bd_ptr as usize) + offset as usize) as *mut u32, data);
+    write_reg((crate_interface::call_interface!(crate::KernelFunc::virt_to_phys(bd_ptr as usize)) + offset as usize) as *mut u32, data);
 }
     
 /// FXmacBdSetRxWrap
@@ -290,7 +289,8 @@ pub fn FXmacAllocDmaPbufs(instance_p: &mut FXmac) -> u32 {
         { info!("FXMAC_LWIP_PORT_CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE_JUMBO } else { info!("NO CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE };
 
         let alloc_rx_buffer_pages = (max_frame_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
-        let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_rx_buffer_pages);
+        let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = 
+        crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_rx_buffer_pages));
 
     let rxringptr: &mut FXmacBdRing = &mut instance_p.rx_bd_queue.bdring;
         let mut rxbd: *mut FXmacBd = null_mut();
@@ -346,7 +346,8 @@ pub fn FXmacAllocDmaPbufs(instance_p: &mut FXmac) -> u32 {
                 FXMAC_MAX_FRAME_SIZE
             };
             let alloc_pages = (max_fr_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
-            let (mut tx_mbufs_vaddr, mut tx_mbufs_dma) = crate::utils::dma_alloc_coherent(alloc_pages);
+            let (mut tx_mbufs_vaddr, mut tx_mbufs_dma) = 
+            crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_pages));
     
             instance_p.lwipport.buffer.tx_pbufs_storage[index as usize] = tx_mbufs_vaddr as u64;
 
@@ -1111,7 +1112,7 @@ fn FreeOnlyTxPbufs(instance_p: &mut FXmac)
         {
             let pbuf = instance_p.lwipport.buffer.tx_pbufs_storage[index];
             let pages = (FXMAC_MAX_FRAME_SIZE as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
-            crate::utils::dma_free_coherent(pbuf as usize, pages);
+            crate_interface::call_interface!(crate::KernelFunc::dma_free_coherent(pbuf as usize, pages));
 
             instance_p.lwipport.buffer.tx_pbufs_storage[index] = 0;
         }

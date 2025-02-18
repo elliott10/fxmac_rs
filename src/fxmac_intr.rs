@@ -425,6 +425,6 @@ pub fn FXmacSetupIsr(instance: &mut FXmac)
 
     // SPI(Shared Peripheral Interrupt) rang: 32..1020
     info!("register callback function for irq: {}", irq_num);
-    crate::utils::dma_request_irq(irq_num, xmac_intr_handler);
+    crate_interface::call_interface!(crate::KernelFunc::dma_request_irq(irq_num, xmac_intr_handler));
 
 }

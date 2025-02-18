@@ -47,6 +47,12 @@ FXmacLwipPortTx(fxmac_device, tx_vec);
 let recv_packets = FXmacRecvHandler(fxmac_device);
 
 ```
+
+### Build
+
+```
+cargo build --target=aarch64-unknown-none-softfloat
+```
 ## About ethernet
 PHY: Motorcomm YT8521
 

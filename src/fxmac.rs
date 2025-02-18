@@ -6,7 +6,6 @@ use crate::fxmac_intr::*;
 use crate::fxmac_phy::*;
 use crate::utils::*;
 use alloc::boxed::Box;
-use log::*;
 
 pub const FXMAC_HANDLER_DMASEND: u32 = 1; /* 发送中断 */
 pub const FXMAC_HANDLER_DMARECV: u32 = 2; /* 接收中断 */
@@ -96,12 +95,12 @@ pub enum FXmacPhyInterface {
 }
 
 pub fn read_reg<T>(src: *const T) -> T {
-    unsafe { core::ptr::read_volatile(phys_to_virt(src as usize) as *const T) }
+    unsafe { core::ptr::read_volatile(crate_interface::call_interface!(crate::KernelFunc::phys_to_virt(src as usize)) as *const T) }
 }
 
 pub fn write_reg<T>(dst: *mut T, value: T) {
     unsafe {
-        core::ptr::write_volatile(phys_to_virt(dst as usize) as *mut T, value);
+        core::ptr::write_volatile(crate_interface::call_interface!(crate::KernelFunc::phys_to_virt(dst as usize)) as *mut T, value);
     }
 }
 
