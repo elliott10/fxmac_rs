@@ -157,10 +157,10 @@ pub struct FXmacNetifBuffer
 impl Default for FXmacNetifBuffer {
     fn default() -> Self {
 
-        let alloc_pages = (FXMAX_RX_BDSPACE_LENGTH + (PAGE_SIZE - 1)) / PAGE_SIZE;
+        let alloc_pages = FXMAX_RX_BDSPACE_LENGTH.div_ceil(PAGE_SIZE);
         let (mut rx_vaddr, mut rx_dma) = crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_pages));
 
-        let alloc_pages = (FXMAX_TX_BDSPACE_LENGTH + (PAGE_SIZE - 1)) / PAGE_SIZE;
+        let alloc_pages = FXMAX_TX_BDSPACE_LENGTH.div_ceil(PAGE_SIZE);
         let (mut tx_vaddr, mut tx_dma) = crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_pages));
 
         //let rx_buf = unsafe { from_raw_parts_mut(vaddr as *mut u8, FXMAX_RX_BDSPACE_LENGTH) };
@@ -288,7 +288,7 @@ pub fn FXmacAllocDmaPbufs(instance_p: &mut FXmac) -> u32 {
         let max_frame_size = if (instance_p.lwipport.feature & FXMAC_LWIP_PORT_CONFIG_JUMBO) != 0
         { info!("FXMAC_LWIP_PORT_CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE_JUMBO } else { info!("NO CONFIG_JUMBO"); FXMAC_MAX_FRAME_SIZE };
 
-        let alloc_rx_buffer_pages = (max_frame_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
+        let alloc_rx_buffer_pages = (max_frame_size as usize).div_ceil(PAGE_SIZE);
         let (mut rx_mbufs_vaddr, mut rx_mbufs_dma) = 
         crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_rx_buffer_pages));
 
@@ -345,11 +345,11 @@ pub fn FXmacAllocDmaPbufs(instance_p: &mut FXmac) -> u32 {
             } else {
                 FXMAC_MAX_FRAME_SIZE
             };
-            let alloc_pages = (max_fr_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
+            let alloc_pages = (max_fr_size as usize).div_ceil(PAGE_SIZE);
             let (mut tx_mbufs_vaddr, mut tx_mbufs_dma) = 
             crate_interface::call_interface!(crate::KernelFunc::dma_alloc_coherent(alloc_pages));
     
-            instance_p.lwipport.buffer.tx_pbufs_storage[index as usize] = tx_mbufs_vaddr as u64;
+            instance_p.lwipport.buffer.tx_pbufs_storage[index] = tx_mbufs_vaddr as u64;
 
             /*
             let txbd: *mut FXmacBd = null_mut();
@@ -424,14 +424,14 @@ pub fn FXmacInitDma(instance_p: &mut FXmac) -> u32
     let FXMAC_TAIL_QUEUE = |queue: u64| 0x0e80 + (queue << 2);
     if (instance_p.config.caps & FXMAC_CAPS_TAILPTR) != 0
     {   
-        write_reg((instance_p.config.base_address + FXMAC_TAIL_QUEUE(0)) as *mut u32, (1<<31) | 0);
+        write_reg((instance_p.config.base_address + FXMAC_TAIL_QUEUE(0)) as *mut u32, ((1<<31)));
     }
 
     0
 }
 
 fn FXMAC_BD_TO_INDEX (ringptr: &mut FXmacBdRing, bdptr: u64) -> u32 {
-    ( (bdptr - ringptr.base_bd_addr as u64) / ringptr.separation as u64 ) as u32
+    ( (bdptr - ringptr.base_bd_addr) / ringptr.separation as u64 ) as u32
 }
 
 /// 从bptr的列表中，获取下一个BD
@@ -499,7 +499,7 @@ pub fn FXmacBdRingCreate(ring_ptr: &mut FXmacBdRing, phys_addr: u64, virt_addr: 
     // 总共的BD数
     ring_ptr.all_cnt = bd_count;
 
-    ring_ptr.run_state = FXMAC_DMA_SG_IS_STOPED as u32;
+    ring_ptr.run_state = FXMAC_DMA_SG_IS_STOPED;
     ring_ptr.phys_base_addr = phys_addr;
     ring_ptr.hw_head = virt_addr_loc as *mut FXmacBd;
     ring_ptr.hw_tail = virt_addr_loc as *mut FXmacBd;
@@ -958,7 +958,7 @@ pub fn FXmacRecvHandler(instance_p: &mut FXmac) -> Option<Vec<Vec<u8>>> {
         SetupRxBds(instance_p);
     }
 
-    if recv_packets.len() > 0 {
+    if !recv_packets.is_empty() {
         Some(recv_packets)
     } else {
         None
@@ -984,7 +984,7 @@ pub fn SetupRxBds(instance_p: &mut FXmac) {
         } else {
             FXMAC_MAX_FRAME_SIZE
         };
-        let alloc_rx_buffer_pages: usize = (max_frame_size as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
+        let alloc_rx_buffer_pages: usize = (max_frame_size as usize).div_ceil(PAGE_SIZE);
 
         status = FXmacBdRingAlloc(rxring, 1, &mut rxbd);
         assert!(!rxbd.is_null());
@@ -1077,13 +1077,13 @@ pub fn FXmacHandleDmaTxError(instance_p: &mut FXmac)
 pub fn FXmacHandleTxErrors(instance_p: &mut FXmac)
 {
     let mut netctrlreg: u32 = read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32);
-    netctrlreg = netctrlreg & !FXMAC_NWCTRL_TXEN_MASK;
+    netctrlreg &= !FXMAC_NWCTRL_TXEN_MASK;
     write_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32, netctrlreg);
     FreeOnlyTxPbufs(instance_p);
 
     CleanDmaTxdescs(instance_p);
     netctrlreg = read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32);
-    netctrlreg = netctrlreg | FXMAC_NWCTRL_TXEN_MASK;
+    netctrlreg |= FXMAC_NWCTRL_TXEN_MASK;
     write_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32, netctrlreg);
 }
 
@@ -1111,7 +1111,7 @@ fn FreeOnlyTxPbufs(instance_p: &mut FXmac)
         if (instance_p.lwipport.buffer.tx_pbufs_storage[index] != 0)
         {
             let pbuf = instance_p.lwipport.buffer.tx_pbufs_storage[index];
-            let pages = (FXMAC_MAX_FRAME_SIZE as usize + (PAGE_SIZE - 1)) / PAGE_SIZE;
+            let pages = (FXMAC_MAX_FRAME_SIZE as usize).div_ceil(PAGE_SIZE);
             crate_interface::call_interface!(crate::KernelFunc::dma_free_coherent(pbuf as usize, pages));
 
             instance_p.lwipport.buffer.tx_pbufs_storage[index] = 0;

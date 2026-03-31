@@ -84,7 +84,7 @@ pub fn xmac_intr_handler() {
 /// FXMAC_HANDLER_LINKCHANGE 连接状态 => instance_p->link_change_handler = FXmacLinkChange;
 /// 
 pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
-     assert!(instance_p.is_ready == FT_COMPONENT_IS_READY as u32);
+     assert!(instance_p.is_ready == FT_COMPONENT_IS_READY);
 
      // 0 ~ FXMAC_QUEUE_MAX_NUM ,Index queue number
      let tx_queue_id = instance_p.tx_bd_queue.queue_id;
@@ -178,7 +178,7 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
                  /* Clear TX status register TX complete indication but preserve
                   * error bits if there is any */
                 write_reg((instance_p.config.base_address + FXMAC_QUEUE_REGISTER_OFFSET(FXMAC_INTQ1_STS_OFFSET, tx_queue_id)) as *mut u32, FXMAC_INTQUESR_TXCOMPL_MASK);
-                write_reg((instance_p.config.base_address + FXMAC_TXSR_OFFSET) as *mut u32, (FXMAC_TXSR_TXCOMPL_MASK | FXMAC_TXSR_USEDREAD_MASK) as u32);
+                write_reg((instance_p.config.base_address + FXMAC_TXSR_OFFSET) as *mut u32, (FXMAC_TXSR_TXCOMPL_MASK | FXMAC_TXSR_USEDREAD_MASK));
 
                 FXmacSendHandler(instance_p);
              }
@@ -204,7 +204,7 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
              {
                  /* Clear RX status register RX complete indication but preserve
                   * error bits if there is any */
-                 write_reg((instance_p.config.base_address + FXMAC_RXSR_OFFSET) as *mut u32, (FXMAC_RXSR_FRAMERX_MASK | FXMAC_RXSR_BUFFNA_MASK) as u32);
+                 write_reg((instance_p.config.base_address + FXMAC_RXSR_OFFSET) as *mut u32, (FXMAC_RXSR_FRAMERX_MASK | FXMAC_RXSR_BUFFNA_MASK));
                 FXmacRecvIsrHandler(instance_p);
  
                  /* add */
@@ -223,12 +223,12 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
                  if (reg_isr & FXMAC_IXR_RXUSED_MASK) != 0 {
                      let reg_ctrl: u32 = read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32);
 
-                     let mut reg_temp: u32 = reg_ctrl | FXMAC_NWCTRL_FLUSH_DPRAM_MASK as u32;
-                     reg_temp &= (!FXMAC_NWCTRL_RXEN_MASK) as u32;
+                     let mut reg_temp: u32 = reg_ctrl | FXMAC_NWCTRL_FLUSH_DPRAM_MASK;
+                     reg_temp &= { (!FXMAC_NWCTRL_RXEN_MASK) };
                      write_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32, reg_temp);
  
                      /* add  */
-                     reg_temp = reg_ctrl | FXMAC_NWCTRL_RXEN_MASK as u32;
+                     reg_temp = reg_ctrl | FXMAC_NWCTRL_RXEN_MASK;
                      write_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32, reg_temp);
                                      
                      if(instance_p.caps & FXMAC_CAPS_ISR_CLEAR_ON_WRITE) != 0
@@ -268,7 +268,7 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
              {
  
                  let mut reg_ctrl: u32 = read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32);
-                 reg_ctrl &= !(FXMAC_NWCTRL_RXEN_MASK as u32);
+                 reg_ctrl &= !{ FXMAC_NWCTRL_RXEN_MASK };
  
                  write_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32, reg_ctrl);
  
@@ -307,7 +307,7 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
   */
  pub fn FXmacQueueIrqDisable(instance_p: &mut FXmac, queue_num: u32, mask: u32)
  {
-     assert!(instance_p.is_ready == FT_COMPONENT_IS_READY as u32);
+     assert!(instance_p.is_ready == FT_COMPONENT_IS_READY);
      assert!(instance_p.config.max_queue_num > queue_num);
  
      if queue_num == 0 {
@@ -322,7 +322,7 @@ pub fn FXmacIntrHandler(vector: i32, instance_p: &mut FXmac) {
  /// FXmacQueueIrqEnable, Enable queue irq
  pub fn FXmacQueueIrqEnable(instance_p: &mut FXmac, queue_num: u32, mask: u32)
  {
-     assert!(instance_p.is_ready == FT_COMPONENT_IS_READY as u32);
+     assert!(instance_p.is_ready == FT_COMPONENT_IS_READY);
      assert!(instance_p.config.max_queue_num > queue_num);
  
      if queue_num == 0 {

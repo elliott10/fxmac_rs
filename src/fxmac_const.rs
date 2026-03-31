@@ -535,8 +535,8 @@ pub const fn BIT(n: u32) -> u32 {
 
 pub const fn GENMASK(h:u32, l: u32) -> u32 {
     (
-    (!(0 as u64) - (1 << l) + 1) &
-     (!(0 as u64) >> (BITS_PER_LONG - 1 - h))
+    (!0_u64 - (1 << l) + 1) &
+     (!0_u64 >> (BITS_PER_LONG - 1 - h))
     ) as u32
 }
 

@@ -241,7 +241,7 @@ pub fn xmac_init(hwaddr: &[u8; 6]) -> &'static mut FXmac { // i32
     // initialize dma
     let mut dmacrreg: u32 = read_reg((xmac.config.base_address + FXMAC_DMACR_OFFSET) as *const u32);
     dmacrreg &= !(FXMAC_DMACR_BLENGTH_MASK);
-    dmacrreg = dmacrreg | FXMAC_DMACR_INCR16_AHB_AXI_BURST; /* Attempt to use bursts of up to 16. */
+    dmacrreg |= FXMAC_DMACR_INCR16_AHB_AXI_BURST; /* Attempt to use bursts of up to 16. */
     write_reg(
         (xmac.config.base_address + FXMAC_DMACR_OFFSET) as *mut u32,
         dmacrreg,
@@ -257,7 +257,7 @@ pub fn xmac_init(hwaddr: &[u8; 6]) -> &'static mut FXmac { // i32
 
     if (xmac.lwipport.feature & FXMAC_LWIP_PORT_CONFIG_UNICAST_ADDRESS_FILITER) != 0 {
         debug!("Set unicast hash table");
-        FXmac_SetHash(&mut xmac, &hwaddr);
+        FXmac_SetHash(&mut xmac, hwaddr);
     }
 
     /* 注册了 lwip_port->ops:
@@ -301,13 +301,13 @@ pub fn FXmacStart(instance_p: &mut FXmac) {
     );
 
     /* Enable transmitter if not already enabled */
-    if (instance_p.config.network_default_config & FXMAC_TRANSMITTER_ENABLE_OPTION as u32) != 0 {
+    if (instance_p.config.network_default_config & FXMAC_TRANSMITTER_ENABLE_OPTION) != 0 {
         let reg_val =
             read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32);
         if (reg_val & FXMAC_NWCTRL_TXEN_MASK) == 0 {
             write_reg(
                 (instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32,
-                reg_val | FXMAC_NWCTRL_TXEN_MASK as u32,
+                reg_val | FXMAC_NWCTRL_TXEN_MASK,
             );
         }
     }
@@ -320,7 +320,7 @@ pub fn FXmacStart(instance_p: &mut FXmac) {
         if (reg_val & FXMAC_NWCTRL_RXEN_MASK) == 0 {
             write_reg(
                 (instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32,
-                reg_val | FXMAC_NWCTRL_RXEN_MASK as u32,
+                reg_val | FXMAC_NWCTRL_RXEN_MASK,
             );
         }
     }
@@ -358,8 +358,8 @@ pub fn FXmacStop(instance_p: &mut FXmac) {
     /* Disable the receiver & transmitter */
     let mut reg_val: u32 =
         read_reg((instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *const u32);
-    reg_val &= !(FXMAC_NWCTRL_RXEN_MASK as u32);
-    reg_val &= !(FXMAC_NWCTRL_TXEN_MASK as u32);
+    reg_val &= !{ FXMAC_NWCTRL_RXEN_MASK };
+    reg_val &= !{ FXMAC_NWCTRL_TXEN_MASK };
     write_reg(
         (instance_p.config.base_address + FXMAC_NWCTRL_OFFSET) as *mut u32,
         reg_val,
@@ -408,7 +408,7 @@ fn FXmacReset(instance_p: &mut FXmac) {
 
     instance_p.config.pclk_hz = FXMAC0_PCLK; // 50000000
 
-    let netctrl = (FXMAC_NWCTRL_STATCLR_MASK & !(FXMAC_NWCTRL_LOOPBACK_LOCAL_MASK as u32))
+    let netctrl = (FXMAC_NWCTRL_STATCLR_MASK & !{ FXMAC_NWCTRL_LOOPBACK_LOCAL_MASK })
         | FXMAC_NWCTRL_MDEN_MASK;
     write_reg((FXMAC_IOBASE + FXMAC_NWCTRL_OFFSET) as *mut u32, netctrl);
 
@@ -461,7 +461,7 @@ fn FXmacReset(instance_p: &mut FXmac) {
      * FXMAC_TRANSMITTER_ENABLE_OPTION and FXMAC_RECEIVER_ENABLE_OPTION are set.
      */
     let options = instance_p.config.network_default_config
-        & !((FXMAC_TRANSMITTER_ENABLE_OPTION | FXMAC_RECEIVER_ENABLE_OPTION) as u32);
+        & !{ (FXMAC_TRANSMITTER_ENABLE_OPTION | FXMAC_RECEIVER_ENABLE_OPTION) };
     FXmacSetOptions(instance_p, options, 0);
     let options = !instance_p.config.network_default_config;
     FXmacClearOptions(instance_p, options, 0);
@@ -547,7 +547,7 @@ fn FXmacDmaWidth(moudle_id: u32) -> u32 {
         return FXMAC_NWCFG_BUS_WIDTH_32_MASK;
     }
 
-    let read_regs = read_reg((FXMAC_IOBASE + FXMAC_DESIGNCFG_DEBUG1_OFFSET as u64) as *const u32);
+    let read_regs = read_reg((FXMAC_IOBASE + FXMAC_DESIGNCFG_DEBUG1_OFFSET) as *const u32);
     match ((read_regs & FXMAC_DESIGNCFG_DEBUG1_BUS_WIDTH_MASK) >> 25) {
         4 => {
             info!("bus width is 128");
@@ -629,22 +629,20 @@ pub fn FXmacSetQueuePtr(queue_p: u64, queue_num: u8, direction: u32) {
                 ((queue_p & ULONG64_LO_MASK) | flag_queue_p) as u32,
             );
         }
+    } else if direction == FXMAC_SEND {
+        write_reg(
+            (FXMAC_IOBASE
+                + FXMAC_QUEUE_REGISTER_OFFSET(FXMAC_TXQ1BASE_OFFSET, queue_num as u64))
+                as *mut u32,
+            ((queue_p & ULONG64_LO_MASK) | flag_queue_p) as u32,
+        );
     } else {
-        if direction == FXMAC_SEND {
-            write_reg(
-                (FXMAC_IOBASE
-                    + FXMAC_QUEUE_REGISTER_OFFSET(FXMAC_TXQ1BASE_OFFSET, queue_num as u64))
-                    as *mut u32,
-                ((queue_p & ULONG64_LO_MASK) | flag_queue_p) as u32,
-            );
-        } else {
-            write_reg(
-                (FXMAC_IOBASE
-                    + FXMAC_QUEUE_REGISTER_OFFSET(FXMAC_RXQ1BASE_OFFSET, queue_num as u64))
-                    as *mut u32,
-                ((queue_p & ULONG64_LO_MASK) | flag_queue_p) as u32,
-            );
-        }
+        write_reg(
+            (FXMAC_IOBASE
+                + FXMAC_QUEUE_REGISTER_OFFSET(FXMAC_RXQ1BASE_OFFSET, queue_num as u64))
+                as *mut u32,
+            ((queue_p & ULONG64_LO_MASK) | flag_queue_p) as u32,
+        );
     }
 
     if direction == FXMAC_SEND
@@ -770,7 +768,7 @@ fn FXmacSetOptions(instance_p: &mut FXmac, options: u32, queue_num: u32) -> u32 
 
         /* Allow broadcast address reception */
         if (options & FXMAC_BROADCAST_OPTION) != 0 {
-            reg_new_netcfg &= !(FXMAC_NWCFG_BCASTDI_MASK as u32);
+            reg_new_netcfg &= !{ FXMAC_NWCFG_BCASTDI_MASK };
         }
 
         /* Allow multicast address filtering */
@@ -923,32 +921,32 @@ fn FXmacClearOptions(instance_p: &mut FXmac, options: u32, queue_num: u32) -> u3
          * It is configured in two different length, up to 1536 and 10240 bytes
          */
         if (options & FXMAC_FRAME1536_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_1536RXEN_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_1536RXEN_MASK };
         }
 
         /* Turn off VLAN packet only */
         if (options & FXMAC_VLAN_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_NVLANDISC_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_NVLANDISC_MASK };
         }
 
         /* Turn off FCS stripping on receive packets */
         if (options & FXMAC_FCS_STRIP_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_FCS_REMOVE_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_FCS_REMOVE_MASK };
         }
 
         /* Turn off length/type field checking on receive packets */
         if (options & FXMAC_LENTYPE_ERR_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_LENGTH_FIELD_ERROR_FRAME_DISCARD_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_LENGTH_FIELD_ERROR_FRAME_DISCARD_MASK };
         }
 
         /* Turn off flow control */
         if (options & FXMAC_FLOW_CONTROL_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_PAUSE_ENABLE_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_PAUSE_ENABLE_MASK };
         }
 
         /* Turn off promiscuous frame filtering (all frames are received) */
         if (options & FXMAC_PROMISC_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_COPYALLEN_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_COPYALLEN_MASK };
         }
 
         /* Disallow broadcast address filtering => broadcast reception */
@@ -958,12 +956,12 @@ fn FXmacClearOptions(instance_p: &mut FXmac, options: u32, queue_num: u32) -> u3
 
         /* Disallow unicast address filtering */
         if (options & FXMAC_UNICAST_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_UCASTHASHEN_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_UCASTHASHEN_MASK };
         }
 
         /* Disallow multicast address filtering */
         if (options & FXMAC_MULTICAST_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_MCASTHASHEN_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_MCASTHASHEN_MASK };
         }
 
         if (options & FXMAC_TAIL_PTR_OPTION) != 0 {
@@ -972,7 +970,7 @@ fn FXmacClearOptions(instance_p: &mut FXmac, options: u32, queue_num: u32) -> u3
 
         /* Disable RX checksum offload */
         if (options & FXMAC_RX_CHKSUM_ENABLE_OPTION) != 0 {
-            reg_new_net_cfg &= !(FXMAC_NWCFG_RXCHKSUMEN_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_RXCHKSUMEN_MASK };
         }
 
         /* Disable jumbo frames */
@@ -982,7 +980,7 @@ fn FXmacClearOptions(instance_p: &mut FXmac, options: u32, queue_num: u32) -> u3
             instance_p.max_mtu_size = FXMAC_MTU;
             instance_p.max_frame_size = FXMAC_MAX_FRAME_SIZE;
 
-            reg_new_net_cfg &= !(FXMAC_NWCFG_JUMBO_MASK as u32);
+            reg_new_net_cfg &= !{ FXMAC_NWCFG_JUMBO_MASK };
 
             reg = read_reg((FXMAC_IOBASE + FXMAC_DMACR_OFFSET) as *const u32);
 
@@ -1022,7 +1020,7 @@ fn FXmacClearOptions(instance_p: &mut FXmac, options: u32, queue_num: u32) -> u3
 
         if (options & FXMAC_SGMII_ENABLE_OPTION) != 0 {
             reg_new_net_cfg &=
-                !((FXMAC_NWCFG_SGMII_MODE_ENABLE_MASK | FXMAC_NWCFG_PCSSEL_MASK) as u32);
+                !{ (FXMAC_NWCFG_SGMII_MODE_ENABLE_MASK | FXMAC_NWCFG_PCSSEL_MASK) };
         }
 
         if (options & FXMAC_LOOPBACK_NO_MII_OPTION) != 0 {
@@ -1105,7 +1103,7 @@ pub fn FXmacSetMacAddress(address_ptr: &[u8; 6], index: u8) -> u32 {
 
     let is_started = 0;
     /* Be sure device has been stopped */
-    if is_started == FT_COMPONENT_IS_STARTED as u32 {
+    if is_started == FT_COMPONENT_IS_STARTED {
         //status = FXMAC_ERR_MAC_IS_PROCESSING;
         status = 9;
         error!("FXMAC is processing when calling FXmacSetMacAddress function");
